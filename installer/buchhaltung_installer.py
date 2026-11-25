@@ -38,6 +38,7 @@ CONFIG = Path(os.environ.get("APPDATA", str(Path.home()))) / "Buchhaltung-Instal
 MANIFEST = ".installiert.json"            # welche Einträge im Ordner vom Installer stammen
 KEEP = {"data", ".env", ".venv", "alte_version", MANIFEST}
 PORT = 8000
+MAX_DIR_LEN = 60                          # längere Pfade scheitern an der Windows-Pfadgrenze (260 Zeichen)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -254,7 +255,8 @@ def setup_environment(folder: Path, python: list[str]) -> None:
     result = subprocess.run([str(venv_python), "-m", "pip", "install", "--disable-pip-version-check", "-q",
                              "-r", str(folder / "requirements.txt")])
     if result.returncode != 0:
-        raise Abbruch("Die Pakete konnten nicht installiert werden (Internetverbindung prüfen).")
+        raise Abbruch("Die Pakete konnten nicht installiert werden. Bitte die Internetverbindung prüfen; "
+                      "bei der Meldung „Long Path“ einen kürzeren Ordner wählen (z. B. C:\\Buchhaltung).")
 
 
 # --------------------------------------------------------------- Abschluss
@@ -277,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--zip", help="Programm aus dieser ZIP-Datei statt von GitHub (zum Testen)")
     parser.add_argument("--ja", action="store_true", help="alle Fragen mit Ja beantworten")
     parser.add_argument("--ohne-python", action="store_true", help="Python/Pakete/Verknüpfung überspringen")
+    parser.add_argument("--ohne-verknuepfung", action="store_true", help="keine Desktop-Verknüpfung anlegen")
     args = parser.parse_args(argv)
 
     say("=" * 64)
@@ -285,6 +288,10 @@ def main(argv: list[str] | None = None) -> int:
     say("=" * 64)
     try:
         folder = choose_dir(args.ordner, args.ja).resolve()
+        if len(str(folder)) > MAX_DIR_LEN and not ask_yes(
+                f"Der Ordnerpfad ist sehr lang ({len(str(folder))} Zeichen). Windows kann dann manche Programmteile "
+                "nicht anlegen. Trotzdem fortfahren? (Empfehlung: C:\\Buchhaltung)", args.ja):
+            raise Abbruch("Abgebrochen – bitte einen kürzeren Ordner wählen.")
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(args.zip) if args.zip else Path(tmp) / "programm.zip"
             if not args.zip:
@@ -295,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         say("Ihre Daten (Ordner data) und Schlüssel (.env) wurden nicht verändert.")
         if not args.ohne_python:
             setup_environment(folder, ensure_python(args.ja))
-            if not update:
+            if not update and not args.ohne_verknuepfung:
                 desktop_shortcut(folder)
         say()
         say("Fertig." + (" Beim nächsten Start sichert das Programm zuerst Ihre Daten und bringt die Datenbank "
