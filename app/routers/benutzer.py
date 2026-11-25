@@ -231,6 +231,29 @@ async def matrix_save(request: Request, ctx: TenantContext = Depends(users_edit)
     return redirect("/benutzer/matrix", f"Zugriffsmatrix gespeichert ({changed} Person(en) geändert).")
 
 
+@router.post("/{membership_id}/app-zuruecksetzen")
+def reset_app(request: Request, membership_id: int, ctx: TenantContext = Depends(users_edit),
+              db: Session = Depends(get_db)):
+    """Authenticator-App einer Person zurücksetzen (Handy und Notfall-Codes verloren). Die Person meldet sich
+    danach mit Passwort + Code per E-Mail an und muss die App sofort neu einrichten (Pflicht)."""
+    from sqlalchemy import delete as sql_delete
+
+    from app.models import UserSession
+    from app.services import totp
+
+    m = _get_membership(db, ctx, membership_id)
+    if not totp.enabled(m.user):
+        return redirect(f"/benutzer/{m.id}", "Für diese Person ist keine Authenticator-App eingerichtet.", "hinweis")
+    totp.disable(m.user)
+    if m.user.id != ctx.user.id:   # alle Anmeldungen der Person beenden (die eigene bleibt bestehen)
+        db.execute(sql_delete(UserSession).where(UserSession.user_id == m.user.id))
+    audit.log(db, action="authenticator_app_zurueckgesetzt", entity="benutzer", entity_id=m.user.id,
+              tenant_id=ctx.tenant_id, user_id=ctx.user.id, ip=anmeldung.client_ip(request))
+    db.commit()
+    return redirect(f"/benutzer/{m.id}", f"Authenticator-App von {m.user.name} zurückgesetzt – bei der nächsten "
+                                         "Anmeldung richtet die Person sie neu ein.")
+
+
 @router.get("/{membership_id}")
 def edit_form(request: Request, membership_id: int, ctx: TenantContext = Depends(users_edit),
               db: Session = Depends(get_db)):

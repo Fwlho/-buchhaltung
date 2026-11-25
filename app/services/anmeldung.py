@@ -19,7 +19,7 @@ CODE_TTL = timedelta(minutes=10)
 CODE_MAX_ATTEMPTS = 5
 CODE_RESEND_COOLDOWN = timedelta(seconds=60)
 SESSION_PENDING_TTL = timedelta(minutes=15)  # Zeit für die Code-Eingabe
-SESSION_IDLE = timedelta(hours=2)
+SESSION_IDLE = timedelta(minutes=30)        # ohne Aktivität abgemeldet (entschieden 25.11.2026)
 SESSION_MAX = timedelta(hours=12)
 INVITATION_TTL = timedelta(days=7)
 
@@ -102,7 +102,9 @@ def create_session(db: Session, user: User, stage: str, request: Request,
     return token
 
 
-def find_session(db: Session, token: str | None) -> UserSession | None:
+def find_session(db: Session, token: str | None, touch: bool = True) -> UserSession | None:
+    """Gültige Sitzung zum Cookie. ``touch=False``: nur nachsehen, ohne sie als Aktivität zu verlängern
+    (für das automatische Neuladen nach Ablauf der Zeit)."""
     if not token:
         return None
     sess = db.scalar(select(UserSession).where(UserSession.token_hash == token_hash(token)))
@@ -113,10 +115,18 @@ def find_session(db: Session, token: str | None) -> UserSession | None:
         db.delete(sess)
         db.commit()
         return None
-    if (now - sess.last_seen_at) > timedelta(minutes=1):
+    if touch and (now - sess.last_seen_at) > timedelta(minutes=1):
         sess.last_seen_at = now
         db.commit()
     return sess
+
+
+def end_all_sessions(db: Session) -> int:
+    """Alle Sitzungen beenden – beim Programmstart: nach einem Neustart muss sich jede/r neu anmelden und
+    die Admin-Bereiche neu freischalten (entschieden 25.11.2026). Gibt die Anzahl zurück."""
+    count = db.execute(delete(UserSession)).rowcount or 0
+    db.commit()
+    return count
 
 
 def end_session(db: Session, token: str | None) -> None:

@@ -37,6 +37,8 @@ class Settings:
     background_jobs: bool
     impressum_url: str = ""
     datenschutz_url: str = ""
+    # Anmeldung per Authenticator-App ist Pflicht (entschieden 25.11.2026); nur Tests schalten das ab
+    totp_required: bool = True
 
     @property
     def is_local(self) -> bool:
@@ -84,6 +86,7 @@ def get_settings() -> Settings:
         # Pflichtangaben für den Betrieb im Internet (§ 5 DDG, Art. 13 DSGVO): Links auf die Seiten des Betreibers
         impressum_url=_https(env.get("IMPRESSUM_URL")),
         datenschutz_url=_https(env.get("DATENSCHUTZ_URL")),
+        totp_required=_bool(env.get("ZWEI_FAKTOR_PFLICHT"), True),
     )
 
 

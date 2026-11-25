@@ -1,5 +1,5 @@
 """Jinja2-Vorlagen, deutsche Filter, Hinweis-Meldungen (Flash) und CSRF-Feld."""
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlencode
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse
@@ -90,6 +90,20 @@ def csrf_input(request: Request) -> Markup:
     return Markup(f'<input type="hidden" name="{CSRF_FIELD}" value="{escape(token)}">')
 
 
+def _refresh(request: Request) -> tuple[int, str]:
+    """Automatisches Neuladen, sobald die Anmeldung (30 Min.) bzw. die Admin-Freigabe (5 Min.) ohne Aktivität
+    abläuft – dann steht die Anmelde- bzw. Admin-Passwort-Seite da statt der Daten (ohne JavaScript)."""
+    from app.services import admin_freigabe, anmeldung
+
+    admin = bool(getattr(request.state, "admin_area", False))
+    seconds = int((admin_freigabe.IDLE if admin else anmeldung.SESSION_IDLE).total_seconds()) + 5
+    target = "/"
+    if request.method == "GET":
+        target = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    params = {"weiter": target, **({"bereich": "admin"} if admin else {})}
+    return seconds, "/abgelaufen?" + urlencode(params)
+
+
 def render(request: Request, template: str, status_code: int = 200, **context):
     """Seite rendern; ergänzt Anmelde-Kontext, CSRF und Hinweis-Meldung."""
     flash = None
@@ -99,6 +113,8 @@ def render(request: Request, template: str, status_code: int = 200, **context):
         flash = {"kind": kind, "text": text}
     context.setdefault("ctx", getattr(request.state, "ctx", None))
     context.setdefault("nav_user", getattr(request.state, "user", None))
+    if context["nav_user"] is not None:
+        context.setdefault("nav_refresh", _refresh(request))
     response = templates.TemplateResponse(
         request, template, {"flash": flash, "csrf_input": csrf_input(request), **context}, status_code=status_code
     )

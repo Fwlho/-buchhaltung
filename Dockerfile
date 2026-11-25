@@ -28,4 +28,4 @@ USER buchhaltung
 EXPOSE 8000
 # Datenbank migrieren, noch offene Belege verschlüsseln (app/services/tresor.py), dann starten. Der Port 8000 ist nur im internen Docker-Netz erreichbar (vor Caddy),
 # deshalb dürfen die Weiterleitungs-Header (echte Besucher-IP) von dort übernommen werden.
-CMD ["sh", "-c", "python -m alembic upgrade head && python -m app.services.tresor && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]
+CMD ["sh", "-c", "python -m alembic upgrade head && python -m app.services.tresor && python -m app.services.neustart && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'"]

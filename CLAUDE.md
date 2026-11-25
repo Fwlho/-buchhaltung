@@ -52,11 +52,18 @@ Diese Datei enthält nur die Arbeitsregeln und wird bei Struktur- oder Konzeptä
   `require_module(modul, edit=…)`. Jede Route braucht eine (Test `tests/test_routen_schutz.py`). CSRF global.
 - **Admin-Passwort** (zweites, persönliches Passwort): Firmenverwaltung und die Module in `deps.ADMIN_MODULES`
   (`einstellungen` inkl. Datensicherung, `benutzer`) verlangen eine Freigabe je Sitzung (`sessions.admin_until`,
-  15 Min. ohne Nutzung, `require_admin_unlock`) – nicht während der ersten Einrichtung. Logik
+  **5 Min.** ohne Nutzung, `require_admin_unlock`) – nicht während der ersten Einrichtung. Logik
   `app/services/admin_freigabe.py`, Seiten `app/routers/admin_freigabe.py` (`/admin-passwort`: festlegen mit
   Anmelde-Passwort, eingeben, vergessen per E-Mail-Code + Anmelde-Passwort, sperren), Ändern unter `/konto`.
   Muss sich vom Anmelde-Passwort unterscheiden; 5 Fehlversuche = 15 Min. Sperre. Ersteinrichtung fragt es mit ab.
   Tests: `login(..., admin=True)` gibt automatisch frei, Helfer `admin_freigabe(c)`; `tests/test_admin_passwort.py`.
+- **Sitzungs-Regeln** (verschärft 25.11.2026): Abmeldung nach **30 Min.** ohne Aktivität (`anmeldung.SESSION_IDLE`),
+  Admin-Freigabe 5 Min.; beim Programmstart enden ALLE Anmeldungen (`app/services/neustart.py`, aus `run.py` und im
+  Docker-CMD). `base.html` lädt per `<meta http-equiv="refresh">` nach Ablauf nach `/abgelaufen` (prüft mit
+  `find_session(touch=False)`, verlängert also nicht) → Anmeldung bzw. Admin-Passwort. Authenticator-App ist **Pflicht**
+  (`ZWEI_FAKTOR_PFLICHT`, Standard an; conftest schaltet sie aus): ohne App nur `deps.APP_SETUP_PATHS` erreichbar
+  (Weiterleitung `/konto?app=pflicht`), auch vor dem Einrichtungs-Assistenten. Inhaber/in kann die App einer Person
+  zurücksetzen (`/benutzer/{id}/app-zuruecksetzen`, beendet deren Sitzungen). Tests `tests/test_sicherheit_sitzung.py`.
 - Zugriffsmatrix `/benutzer/matrix` (alle Personen × Bereiche + Sonderrechte, bearbeitbar; gleiche Regeln wie
   „Rechte bearbeiten“ über `_change_problem`/`_apply_change` in `app/routers/benutzer.py`, alles-oder-nichts).
 - `app/permissions.py` – Module, Rechtestufen (keine/lesen/bearbeiten), Sonderrechte, Rollen-Vorlagen.

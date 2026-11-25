@@ -3,6 +3,10 @@
 {% block mainclass %}page narrow{% endblock %}
 {% block content %}
 <h1>Mein Konto</h1>
+{% if totp_required and not totp_on and not recovery_codes %}
+<div class="notice hinweis" role="alert"><strong>Bitte zuerst die Anmeldung per Authenticator-App einrichten.</strong>
+  Sie ist Pflicht – bis dahin sind die anderen Programmteile gesperrt. Unten bei „Anmeldung per Authenticator-App“ geht es los.</div>
+{% endif %}
 <section class="card">
   <p>{{ nav_user.name }}<br><span class="help">{{ nav_user.email }}</span></p>
 </section>
@@ -33,6 +37,7 @@
     <div class="notice ok">Die Authenticator-App ist eingerichtet. Ab jetzt melden Sie sich mit dem Code aus der App an.</div>
     <p><strong>Ihre Notfall-Codes – jetzt ausdrucken oder notieren, sie werden nur einmal angezeigt.</strong>
       Jeder Code funktioniert genau einmal, falls das Handy verloren geht.</p>
+    {% if totp_required %}<p><a class="btn primary" href="/">Weiter zum Programm</a></p>{% endif %}
     <ul class="recovery-codes">{% for c in recovery_codes %}<li><code>{{ c }}</code></li>{% endfor %}</ul>
     <p class="row"><a class="btn secondary" href="/konto">Erledigt, Codes sind notiert</a></p>
   {% elif app_secret %}

@@ -16,7 +16,7 @@ from app.database import utcnow
 from app.models import LoginThrottle, User, UserSession
 from app.security import hash_password, password_problem, verify_password
 
-IDLE = timedelta(minutes=15)
+IDLE = timedelta(minutes=5)       # Admin-Bereiche schließen nach 5 Min. ohne Nutzung (25.11.2026)
 MAX_FAILURES = 5
 LOCK = timedelta(minutes=15)
 PAGE = "/admin-passwort"
@@ -32,8 +32,8 @@ def unlock(sess: UserSession) -> None:
 
 
 def touch(db: Session, sess: UserSession) -> None:
-    """Freigabe bei Nutzung verlängern – höchstens einmal pro Minute in die Datenbank schreiben."""
-    if sess.admin_until - utcnow() < IDLE - timedelta(minutes=1):
+    """Freigabe bei Nutzung verlängern – höchstens alle 30 Sekunden in die Datenbank schreiben."""
+    if sess.admin_until - utcnow() < IDLE - timedelta(seconds=30):
         unlock(sess)
         db.commit()
 
@@ -52,6 +52,10 @@ def unlock_url(request: Request) -> str:
     same_host = referer.netloc in ("", request.url.netloc)
     target = (referer.path + (f"?{referer.query}" if referer.query else "")) if same_host else "/"
     return f"{PAGE}?{urlencode({'weiter': safe_next(target), 'verworfen': '1'})}"
+
+
+def unlock_url_for(target: str) -> str:
+    return f"{PAGE}?{urlencode({'weiter': safe_next(target)})}"
 
 
 def safe_next(url: str | None) -> str:

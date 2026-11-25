@@ -49,4 +49,16 @@
     <button type="submit" name="aktion" value="speichern" class="btn primary">Speichern</button>
   </div>
 </form>
+<section class="card">
+  <h2>Authenticator-App</h2>
+  {% if m.user.totp_enabled_at %}
+  <p>Eingerichtet seit {{ m.user.totp_enabled_at|datum }}.</p>
+  <form method="post" action="/benutzer/{{ m.id }}/app-zuruecksetzen">{{ csrf_input }}
+    <button type="submit" class="btn danger">Authenticator-App zurücksetzen</button></form>
+  <p class="help">Nur nötig, wenn Handy und Notfall-Codes verloren sind. Die Person meldet sich danach mit Passwort und
+    Code per E-Mail an und muss die App sofort neu einrichten.</p>
+  {% else %}
+  <p class="help">Noch nicht eingerichtet – die Person wird bei der nächsten Anmeldung dazu aufgefordert.</p>
+  {% endif %}
+</section>
 {% endblock %}

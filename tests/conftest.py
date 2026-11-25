@@ -23,6 +23,7 @@ os.environ["SECRET_KEY"] = "test-secret"
 os.environ["ENCRYPTION_KEY"] = Fernet.generate_key().decode()
 os.environ["SMTP_HOST"] = ""
 os.environ["SETUP_TOKEN"] = ""
+os.environ["ZWEI_FAKTOR_PFLICHT"] = "false"  # eigene Tests schalten die Pflicht ein (test_sicherheit_sitzung.py)
 os.environ["BACKGROUND_JOBS"] = "false"  # Hintergrund-Abruf in Tests nicht automatisch starten
 os.environ.pop("ANTHROPIC_API_KEY", None)  # Tests dürfen nie die echte KI-Schnittstelle erreichen
 

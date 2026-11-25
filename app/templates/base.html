@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if nav_refresh %}<meta http-equiv="refresh" content="{{ nav_refresh[0] }};url={{ nav_refresh[1] }}">{% endif %}
   <title>{% block title %}Buchhaltung{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='favicon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}{% if static_version is defined %}?v={{ static_version('style.css') }}{% endif %}">

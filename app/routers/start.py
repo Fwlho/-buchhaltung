@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.deps import TenantContext, membership_for, public, require_module, require_user
 from app.models import User, UserSession
@@ -119,7 +120,8 @@ def change_password(
 
 def _account(request: Request, user: User, status_code: int = 200, **extra):
     return render(request, "konto.html", status_code=status_code, errors=extra.pop("errors", {}),
-                  totp_on=totp.enabled(user), totp_rest=len(user.totp_recovery or []), **extra)
+                  totp_on=totp.enabled(user), totp_required=get_settings().totp_required,
+                  totp_rest=len(user.totp_recovery or []), **extra)
 
 
 @router.post("/konto/app/einrichten")

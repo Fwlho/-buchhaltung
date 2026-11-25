@@ -20,13 +20,17 @@ from app.database import get_db
 from app.models import Membership, Tenant, User, UserSession
 from app.permissions import has_extra, has_module
 from app.security import constant_equal
-from app.services import admin_freigabe
+from app.config import get_settings
+from app.services import admin_freigabe, totp
 from app.services.anmeldung import SESSION_COOKIE, active_memberships, find_session
 from app.templating import CSRF_COOKIE, CSRF_FIELD
 
 
 # Module, die nur nach Eingabe des Admin-Passworts erreichbar sind (Datensicherung gehört zu „einstellungen“)
 ADMIN_MODULES = {"einstellungen", "benutzer"}
+# Ohne eingerichtete Authenticator-App (Pflicht, entschieden 25.11.2026) sind nur diese Seiten erreichbar
+APP_SETUP_PATHS = {"/konto", "/konto/app/einrichten", "/konto/app/qr.svg", "/konto/app/bestaetigen", "/logout"}
+APP_SETUP_PAGE = "/konto?app=pflicht"
 
 
 class AuthRedirect(Exception):
@@ -103,6 +107,8 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> User:
     if user is None or not user.is_active:
         raise AuthRedirect("/login")
     request.state.user = user
+    if get_settings().totp_required and not totp.enabled(user) and request.url.path not in APP_SETUP_PATHS:
+        raise AuthRedirect(APP_SETUP_PAGE)
     return user
 
 
@@ -120,6 +126,7 @@ def require_admin_unlock(request: Request, db: Session) -> None:
     sess: UserSession = request.state.session
     if admin_freigabe.is_unlocked(sess):
         admin_freigabe.touch(db, sess)
+        request.state.admin_area = True          # Seite lädt nach Ablauf der Admin-Zeit neu (base.html)
         return
     raise AuthRedirect(admin_freigabe.unlock_url(request))
 

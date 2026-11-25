@@ -4,6 +4,7 @@
 1. Legt beim ersten Start die Datei .env mit zufälligen Schlüsseln an.
 2. Legt eine Datensicherung an (nur wenn sich seit der letzten etwas geändert hat).
 3. Bringt die Datenbank auf den neuesten Stand (alembic upgrade head) und verschlüsselt noch offene Belege.
+   Beendet alle alten Anmeldungen (nach dem Neustart neu anmelden, Admin-Bereiche neu freischalten).
 4. Startet den Webserver auf http://127.0.0.1:8000
 """
 import secrets
@@ -80,6 +81,13 @@ def encrypt_files() -> None:
     tresor.main()
 
 
+def end_sessions() -> None:
+    """Nach jedem Start neu anmelden – alte Anmeldungen und Admin-Freischaltungen gelten nicht weiter."""
+    from app.services import neustart
+
+    neustart.main()
+
+
 def backup() -> None:
     """Sicherung VOR der Migration – so lässt sich auch ein fehlgeschlagenes Update rückgängig machen."""
     from app.services import sicherung
@@ -123,6 +131,7 @@ def main() -> None:
     backup()
     migrate()
     encrypt_files()
+    end_sessions()
 
     import uvicorn
 

@@ -28,6 +28,24 @@ def login_form(request: Request, db: Session = Depends(get_db)):
     return render(request, "login.html", email="")
 
 
+@router.get("/abgelaufen", dependencies=[Depends(public)])
+def expired(request: Request, weiter: str = "/", bereich: str = "", db: Session = Depends(get_db)):
+    """Ziel des automatischen Neuladens nach Ablauf der Zeit (``base.html``). Prüft OHNE die Sitzung zu
+    verlängern: abgelaufen -> Anmeldung bzw. Admin-Passwort; sonst (Aktivität in einem anderen Fenster) zurück."""
+    from app.services import admin_freigabe
+
+    target = admin_freigabe.safe_next(weiter)
+    sess = svc.find_session(db, request.cookies.get(svc.SESSION_COOKIE), touch=False)
+    if sess is None or sess.stage != "ok":
+        minutes = int(svc.SESSION_IDLE.total_seconds() // 60)
+        return redirect("/login", f"Aus Sicherheitsgründen wurden Sie nach {minutes} Minuten ohne Aktivität "
+                                  "abgemeldet. Bitte neu anmelden.", "hinweis")
+    if bereich == "admin" and not admin_freigabe.is_unlocked(sess):
+        return redirect(admin_freigabe.unlock_url_for(target), "Die Admin-Bereiche wurden nach "
+                        f"{int(admin_freigabe.IDLE.total_seconds() // 60)} Minuten ohne Nutzung gesperrt.", "hinweis")
+    return redirect(target)
+
+
 @router.post("/login", dependencies=[Depends(public)])
 def login_submit(
     request: Request,
