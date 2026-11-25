@@ -22,6 +22,13 @@ Diese Datei enthält nur die Arbeitsregeln und wird bei Struktur- oder Konzeptä
   Schlüssel mit Aussperr-Schutz, fail2ban, unattended-upgrades). Skripte immer mit LF-Zeilenenden (Upload wandelt um).
   Tests `tests/test_server_haertung.py` (wertet die Compose-Datei mit `docker compose config` aus). Die komplette Testsuite läuft auch gegen
   PostgreSQL (28.10.2026 grün); das Docker-Paket selbst ist noch nicht auf einem echten Server gelaufen.
+- **GitHub + Installer** (seit 25.11.2026): `Clean Version` ist ein Git-Repository, Ziel `github.com/Fwlho/-buchhaltung`
+  (Zweig `main`, öffentlich). `.gitignore` schließt `data*/`, `.env`, `.venv`, `.claude/`, `SICHERHEITSPRUEFUNG.md`,
+  `PRUEFBERICHT.md` aus – vor jedem Push prüfen, dass keine Daten/Schlüssel dabei sind. CleanVersion1 (Echtdaten) nie
+  hochladen. `installer/buchhaltung_installer.py` (nur Standardbibliothek) lädt `main` als ZIP, spielt den Code ein (nie
+  `data`, `.env`, `.venv`; Liste `.installiert.json`, alter Stand in `alte_version/`), installiert bei Bedarf Python von
+  python.org, legt `.venv` + Pakete + Desktop-Verknüpfung an. Bauen: `installer\bauen.bat` → `installer\dist\
+  Buchhaltung-Installer.exe` (PyInstaller in `installer\.bau`). Tests `tests/test_installer.py`.
 - Tests: `.venv\Scripts\python.exe -m pytest` (Tests nutzen eine eigene Temp-DB, siehe `tests/conftest.py`).
   Gegen PostgreSQL: `TEST_DATABASE_URL=postgresql+psycopg://…/buchhaltung_test` setzen (Name muss „test“ enthalten;
   lokal z. B. mit dem Paket `pgserver` in einer separaten Python-3.9-Umgebung). Bei Datenbank-Änderungen beide prüfen.
