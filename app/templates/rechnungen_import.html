@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Alte Rechnungen hochladen{% endblock %}
+{% block content %}
+<p><a href="/rechnungen">← Ausgangsrechnungen</a></p>
+<h1>Alte Ausgangsrechnungen hochladen</h1>
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+<p class="intro">Für Rechnungen, die Sie früher mit einem anderen Programm geschrieben haben. Das Programm liest
+  Rechnungsnummer, Datum, Kunde und Beträge aus. Sie prüfen die Angaben, geben bei Bedarf das Zahlungsdatum an und
+  übernehmen die Rechnung. Erst dann zählt sie in EÜR, Umsatzsteuer, offenen Posten und Mahnwesen –
+  mit dem <strong>unveränderten Original-PDF</strong>. Übernommene Rechnungen sind festgeschrieben (GoBD).</p>
+
+{% if can_edit %}
+<section class="card">
+  <h2>PDF-Dateien hochladen</h2>
+  <form method="post" action="/rechnungen/import/hochladen" enctype="multipart/form-data">
+    {{ csrf_input }}
+    <div class="field">
+      <label for="dateien">Rechnungen (PDF, auch mehrere, je höchstens 25 MB)</label>
+      <input type="file" id="dateien" name="dateien" accept="application/pdf" multiple required>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Hochladen und auslesen</button></div>
+  </form>
+  <p class="help">Passt die Rechnungsnummer zum eingestellten Nummernformat, zählt das Programm für neue Rechnungen
+    automatisch dahinter weiter. Dieselbe Nummer kann nicht zweimal vorkommen.</p>
+</section>
+{% endif %}
+
+{% if folder_local %}
+<section class="card">
+  <h2>Eingangsordner</h2>
+  {% if folder %}
+    <p class="help">Dateien aus <code>{{ folder }}</code> werden {% if folder_auto %}automatisch jede Minute eingelesen, solange das
+      Programm läuft{% else %}eingelesen, wenn Sie auf „Jetzt einlesen“ klicken{% endif %}. Danach liegen sie im Unterordner
+      „verarbeitet“, Problemfälle mit Begründung in „fehler“.</p>
+    {% if folder_status %}<p><strong>Zuletzt {{ folder_status.zeit }}:</strong> {{ folder_status.eingelesen }} Datei(en) eingelesen{% if folder_status.fehler %}, {{ folder_status.fehler|length }} Problemfall/-fälle{% endif %}.</p>{% endif %}
+    {% if can_edit %}
+    <form method="post" action="/rechnungen/import/ordner-einlesen" class="row">
+      {{ csrf_input }}<button type="submit" class="btn secondary">Jetzt einlesen</button>
+    </form>
+    {% endif %}
+  {% else %}
+    <p class="help">Noch kein Ordner eingerichtet.{% if can_settings %} <a href="/einstellungen/ordner">Eingangsordner einrichten</a>{% endif %}
+      – danach einfach Rechnungen hineinlegen (auch über ein Netzlaufwerk), sie landen dann hier.</p>
+  {% endif %}
+</section>
+{% endif %}
+<section class="card">
+  <h2>Noch zu prüfen</h2>
+  {% if docs %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Hochgeladen</th><th>Kunde</th><th>Rechnungsnr.</th><th>Datum</th><th class="num">Brutto</th><th>Hinweis</th></tr></thead>
+    <tbody>
+    {% for d in docs %}
+    <tr>
+      <td class="nowrap">{{ d.created_at|datumzeit }}</td>
+      <td><a href="/rechnungen/import/{{ d.id }}">{{ d.recipient_name or '(Kunde unbekannt)' }}</a></td>
+      <td>{{ d.number or '' }}</td>
+      <td class="nowrap">{{ d.doc_date|datum }}</td>
+      <td class="num nowrap">{{ d.gross_total|geld }}</td>
+      <td>{% if d.review_fields %}<span class="badge warn">bitte prüfen</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p>Nichts zu prüfen.</p>
+  {% endif %}
+</section>
+{% endblock %}

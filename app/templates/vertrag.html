@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Vertrag {{ contract.title }}{% endblock %}
+{% block content %}
+<p><a href="/vertraege">← Verträge</a></p>
+<h1>{{ contract.title }} <small>{{ contract.customer.name }} · <span class="badge {{ 'ok' if contract.status == 'aktiv' else '' }}">{{ contract.status_label }}</span></small></h1>
+{% if errors._ %}<div class="notice fehler">{{ errors._ }}</div>{% endif %}
+{% if contract.status == 'aktiv' %}
+<p class="notice hinweis">Nächster Rechnungsentwurf: <strong>{{ next_label }}</strong>, wird ab {{ next_due|datum }} angelegt.</p>
+{% endif %}
+
+<form method="post" action="/vertraege/{{ contract.id }}" novalidate>
+  {{ csrf_input }}
+  <fieldset {% if not can_edit %}disabled{% endif %}>
+  <section class="card">
+    <div class="grid">
+      <div class="field wide {% if errors.title %}has-error{% endif %}">
+        <label for="title">Bezeichnung <span class="req">*</span></label>
+        <input type="text" id="title" name="title" value="{{ v.title }}" maxlength="200">
+        {% if errors.title %}<p class="error">{{ errors.title }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="billing_mode">Abrechnung</label>
+        <select id="billing_mode" name="billing_mode">
+          {% for key, label in modes.items() %}<option value="{{ key }}" {% if v.billing_mode == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          {% for key, label in statuses.items() %}<option value="{{ key }}" {% if v.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <p class="help">„pausiert“ = vorerst keine Entwürfe; verpasste Monate werden beim Fortsetzen nachgeholt.</p>
+      </div>
+      <div class="field {% if errors.start_month %}has-error{% endif %}">
+        <label for="start_month">Erster Monat (MM.JJJJ) <span class="req">*</span></label>
+        <input type="text" id="start_month" name="start_month" value="{{ v.start_month }}" placeholder="01.2027" {% if invoices %}readonly{% endif %}>
+        {% if errors.start_month %}<p class="error">{{ errors.start_month }}</p>{% elif invoices %}<p class="help">Nach der ersten Rechnung nicht mehr änderbar.</p>{% endif %}
+      </div>
+      <div class="field {% if errors.end_month %}has-error{% endif %}">
+        <label for="end_month">Letzter Monat (leer = unbefristet)</label>
+        <input type="text" id="end_month" name="end_month" value="{{ v.end_month }}" placeholder="12.2027">
+        {% if errors.end_month %}<p class="error">{{ errors.end_month }}</p>{% endif %}
+      </div>
+      <div class="field wide">
+        <label for="object_address">Leistungsort (optional)</label>
+        <textarea id="object_address" name="object_address" rows="2">{{ v.object_address }}</textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Monatliche Positionen <small>netto je Monat</small></h2>
+    <div class="table-wrap">
+    <table class="table positions">
+      <thead><tr><th>Bezeichnung / Beschreibung</th><th>Menge</th><th>Einheit</th><th>Preis netto</th><th>USt</th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set i = loop.index0 %}
+      <tr class="{% if errors['pos-' ~ i] %}has-error{% endif %}">
+        <td><input type="text" name="pos-{{ i }}-titel" value="{{ r.titel }}" aria-label="Bezeichnung Position {{ i + 1 }}">
+          <textarea name="pos-{{ i }}-beschreibung" rows="1" aria-label="Beschreibung Position {{ i + 1 }}">{{ r.beschreibung }}</textarea>
+          {% if errors['pos-' ~ i] %}<p class="error">{{ errors['pos-' ~ i] }}</p>{% endif %}</td>
+        <td><input type="text" name="pos-{{ i }}-menge" value="{{ r.menge }}" class="short" aria-label="Menge"></td>
+        <td><select name="pos-{{ i }}-einheit" aria-label="Einheit">{% for u in units %}<option {% if r.einheit == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td>
+        <td><input type="text" name="pos-{{ i }}-preis" value="{{ r.preis }}" class="short" aria-label="Preis"></td>
+        <td><select name="pos-{{ i }}-satz" aria-label="Steuersatz"><option value="">Standard</option>
+          {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}</select></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="help">Leere Zeilen werden ignoriert. Monatlich netto zurzeit: <strong>{{ contract.monthly_net|geld }}</strong>.</p>
+    <div class="field wide">
+      <label for="notes">Interne Notiz</label>
+      <textarea id="notes" name="notes" rows="2">{{ v.notes }}</textarea>
+    </div>
+  </section>
+  {% if can_edit %}<div class="actions"><button type="submit" class="btn primary">Speichern</button></div>{% endif %}
+  </fieldset>
+</form>
+
+<section class="card">
+  <h2>Rechnungen aus diesem Vertrag</h2>
+  {% if invoices %}
+  <table class="table compact">
+    <thead><tr><th>Leistungsmonat</th><th>Nr.</th><th class="num">Brutto</th><th>Status</th></tr></thead>
+    {% for d in invoices %}
+    <tr><td>{{ d.service_date|datum }} – {{ d.service_until|datum }}</td><td><a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a></td>
+      <td class="num">{{ d.gross_total|geld }}</td><td>{% if d.is_draft %}<span class="badge">Entwurf</span>{% else %}{{ d.status_label }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="help">Noch keine Rechnungen.</p>{% endif %}
+</section>
+{% endblock %}

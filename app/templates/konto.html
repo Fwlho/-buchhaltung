@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Mein Konto{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<h1>Mein Konto</h1>
+<section class="card">
+  <p>{{ nav_user.name }}<br><span class="help">{{ nav_user.email }}</span></p>
+</section>
+<section class="card">
+  <h2>Passwort ändern</h2>
+  <form method="post" action="/konto/passwort" novalidate>
+    {{ csrf_input }}
+    <div class="field {% if errors.old_password %}has-error{% endif %}">
+      <label for="old_password">Bisheriges Passwort</label>
+      <input type="password" id="old_password" name="old_password" autocomplete="current-password" required>
+      {% if errors.old_password %}<p class="error">{{ errors.old_password }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password">Neues Passwort (mindestens 10 Zeichen)</label>
+      <input type="password" id="password" name="password" autocomplete="new-password" required>
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password2">Neues Passwort wiederholen</label>
+      <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+      {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Passwort ändern</button></div>
+  </form>
+</section>
+<section class="card">
+  <h2>Anmeldung per Authenticator-App</h2>
+  {% if recovery_codes %}
+    <div class="notice ok">Die Authenticator-App ist eingerichtet. Ab jetzt melden Sie sich mit dem Code aus der App an.</div>
+    <p><strong>Ihre Notfall-Codes – jetzt ausdrucken oder notieren, sie werden nur einmal angezeigt.</strong>
+      Jeder Code funktioniert genau einmal, falls das Handy verloren geht.</p>
+    <ul class="recovery-codes">{% for c in recovery_codes %}<li><code>{{ c }}</code></li>{% endfor %}</ul>
+    <p class="row"><a class="btn secondary" href="/konto">Erledigt, Codes sind notiert</a></p>
+  {% elif app_secret %}
+    <p>1. Authenticator-App öffnen (z. B. Microsoft oder Google Authenticator, 2FAS, Aegis) und diesen QR-Code scannen:</p>
+    <p><img src="/konto/app/qr.svg" alt="QR-Code für die Authenticator-App" width="220" height="220" class="qr"></p>
+    <p class="help">Scannen nicht möglich? Diesen Schlüssel von Hand eintragen: <code>{{ app_secret }}</code></p>
+    <form method="post" action="/konto/app/bestaetigen" novalidate>
+      {{ csrf_input }}
+      <div class="field {% if errors.app_code %}has-error{% endif %}">
+        <label for="app_code">2. Den 6-stelligen Code aus der App eingeben</label>
+        <input type="text" id="app_code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+               class="code-input" required autofocus>
+        {% if errors.app_code %}<p class="error">{{ errors.app_code }}</p>{% endif %}
+      </div>
+      <div class="actions"><button type="submit" class="btn primary">Einrichtung abschließen</button></div>
+    </form>
+  {% elif totp_on %}
+    <p><span class="badge ok">aktiv</span> seit {{ nav_user.totp_enabled_at|datumzeit }} – Anmeldung mit Code aus der App,
+      kein Code mehr per E-Mail. Noch {{ totp_rest }} Notfall-Code(s) übrig.</p>
+    <details>
+      <summary>Authenticator-App abschalten</summary>
+      <form method="post" action="/konto/app/abschalten" novalidate>
+        {{ csrf_input }}
+        <div class="field {% if errors.app_password %}has-error{% endif %}">
+          <label for="app_password_off">Anmelde-Passwort</label>
+          <input type="password" id="app_password_off" name="password" autocomplete="current-password" required>
+          {% if errors.app_password %}<p class="error">{{ errors.app_password }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.app_code %}has-error{% endif %}">
+          <label for="app_code_off">Code aus der App (oder Notfall-Code)</label>
+          <input type="text" id="app_code_off" name="code" autocomplete="one-time-code" maxlength="12" required>
+          {% if errors.app_code %}<p class="error">{{ errors.app_code }}</p>{% endif %}
+        </div>
+        <div class="actions"><button type="submit" class="btn small danger">Abschalten</button></div>
+      </form>
+    </details>
+  {% else %}
+    <p class="help">Sicherer als der Code per E-Mail: Nach dem Passwort fragt das Programm einen Code aus einer App auf Ihrem
+      Handy ab. Wer Ihr E-Mail-Postfach knackt, kommt dann trotzdem nicht ins Programm.</p>
+    <form method="post" action="/konto/app/einrichten" novalidate class="row">
+      {{ csrf_input }}
+      <div class="field {% if errors.app_password %}has-error{% endif %}">
+        <label for="app_password">Anmelde-Passwort zur Bestätigung</label>
+        <input type="password" id="app_password" name="password" autocomplete="current-password" required>
+        {% if errors.app_password %}<p class="error">{{ errors.app_password }}</p>{% endif %}
+      </div>
+      <button type="submit" class="btn primary">Authenticator-App einrichten</button>
+    </form>
+  {% endif %}
+</section>
+<section class="card">
+  <h2>Admin-Passwort</h2>
+  <p class="help">Zweites, persönliches Passwort für Einstellungen, Benutzerverwaltung, Datensicherung und
+    Firmenverwaltung. Es muss sich vom Anmelde-Passwort unterscheiden.</p>
+  {% if nav_user.admin_password_hash %}
+  <form method="post" action="/konto/admin-passwort" novalidate>
+    {{ csrf_input }}
+    <div class="field {% if errors.old_admin_password %}has-error{% endif %}">
+      <label for="old_admin_password">Bisheriges Admin-Passwort</label>
+      <input type="password" id="old_admin_password" name="old_admin_password" autocomplete="off" required>
+      {% if errors.old_admin_password %}<p class="error">{{ errors.old_admin_password }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.admin_password %}has-error{% endif %}">
+      <label for="admin_password">Neues Admin-Passwort (mindestens 10 Zeichen)</label>
+      <input type="password" id="admin_password" name="admin_password" autocomplete="new-password" required>
+    </div>
+    <div class="field {% if errors.admin_password %}has-error{% endif %}">
+      <label for="admin_password2">Neues Admin-Passwort wiederholen</label>
+      <input type="password" id="admin_password2" name="admin_password2" autocomplete="new-password" required>
+      {% if errors.admin_password %}<p class="error">{{ errors.admin_password }}</p>{% endif %}
+    </div>
+    <div class="actions">
+      <a class="btn link" href="/admin-passwort/vergessen?weiter=/konto">Admin-Passwort vergessen?</a>
+      <button type="submit" class="btn primary">Admin-Passwort ändern</button>
+    </div>
+  </form>
+  <form method="post" action="/admin-passwort/sperren" class="row">
+    {{ csrf_input }}
+    <button type="submit" class="btn secondary">Admin-Bereiche jetzt sperren</button>
+  </form>
+  {% else %}
+  <p>Noch nicht festgelegt. <a href="/admin-passwort?weiter=/konto">Jetzt festlegen</a></p>
+  {% endif %}
+</section>
+{% endblock %}

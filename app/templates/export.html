@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Export für die Steuerberatung{% endblock %}
+{% block content %}
+<h1>Export für die Steuerberatung <small>{{ period.label }}</small></h1>
+{% include "_zeitraum.html" %}
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+{% if config_problem %}<div class="notice hinweis">{{ config_problem }}</div>{% endif %}
+
+{% if result %}
+<section class="card">
+  <h2>Inhalt des Exports</h2>
+  <ul>
+    <li><strong>DATEV-Buchungsstapel</strong> (EXTF-Format, CSV): {{ result.bookings|length }} Buchungssätze</li>
+    <li><strong>Belege</strong> als PDF (bei XRechnung zusätzlich die XML-Datei): {{ result.docs|length }} Dateien</li>
+    <li><strong>Übersicht</strong> aller Belege als CSV (für Excel)</li>
+  </ul>
+  {% if result.problems %}
+  <div class="notice hinweis"><strong>Bitte beachten:</strong>
+    <ul>{% for p in result.problems %}<li>{{ p }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  {% if result.docs %}
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Datum</th><th>Art</th><th>Nr.</th><th>Partner</th><th class="num">Brutto</th></tr></thead>
+    {% for d in result.docs %}
+    <tr><td>{{ d.doc_date|datum }}</td><td>{{ 'Ausgang' if d.direction == 'ausgang' else 'Eingang' }}{% if d.kind != 'rechnung' %} ({{ d.kind }}){% endif %}</td>
+      <td>{{ d.number }}</td><td>{{ d.recipient_name if d.direction == 'ausgang' else d.partner_name }}</td>
+      <td class="num">{{ d.gross_total|geld }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% endif %}
+  <div class="actions">
+    {% if config_problem %}
+    <span class="help">Für den Download bitte zuerst <a href="/einstellungen/datev">Berater- und Mandantennummer</a> eintragen.</span>
+    {% else %}
+    <a class="btn primary" href="/export/datev.zip?{{ query }}">ZIP herunterladen</a>
+    {% endif %}
+  </div>
+  <p class="help">Nur geprüfte, festgeschriebene Belege mit Rechnungsdatum im Zeitraum – der Prüfbereich und
+    Entwürfe zählen nicht mit. Rechnungen werden über Kunden- und Lieferantenkonten gebucht
+    (Kundennummer = Debitor, Lieferantennummer = Kreditor). Bitte den ersten Import gemeinsam mit Ihrer
+    Steuerberatung prüfen. Ersetzt keine Steuerberatung.</p>
+</section>
+{% endif %}
+{% endblock %}

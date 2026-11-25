@@ -1,0 +1,41 @@
+{# Formularfeld (Definition siehe app/forms.py) – für Einstellungen und Stammdaten #}
+{% macro form_field(f, values, errors, secrets_present=(), disabled=False) -%}
+{% set value = values.get(f.key, '') %}
+{% set err = errors.get(f.key) %}
+{% if f.type == 'logo' %}
+  {# Das Logo hat ein eigenes Formular (Datei-Upload), siehe _gruppe_form.html #}
+{% elif f.type == 'bool' %}
+<div class="field check {% if err %}has-error{% endif %}">
+  <label><input type="checkbox" name="{{ f.key }}" value="1" {% if value %}checked{% endif %} {% if disabled %}disabled{% endif %}> {{ f.label }}</label>
+  {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+  {% if err %}<p class="error">{{ err }}</p>{% endif %}
+</div>
+{% else %}
+<div class="field {% if err %}has-error{% endif %} {% if f.type == 'textarea' %}wide{% endif %}">
+  <label for="{{ f.key }}">{{ f.label }}{% if f.required %} <span class="req" title="Pflichtfeld">*</span>{% endif %}</label>
+  {% if f.type == 'textarea' %}
+    <textarea id="{{ f.key }}" name="{{ f.key }}" rows="3" {% if disabled %}disabled{% endif %}>{{ value }}</textarea>
+  {% elif f.type == 'choice' %}
+    <select id="{{ f.key }}" name="{{ f.key }}" {% if disabled %}disabled{% endif %}>
+      {% for v, label in f.choices %}
+      <option value="{{ v }}" {% if v == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  {% elif f.type == 'secret' %}
+    <input type="password" id="{{ f.key }}" name="{{ f.key }}" autocomplete="new-password"
+           placeholder="{% if f.key in secrets_present %}gespeichert – leer lassen = unverändert{% endif %}" {% if disabled %}disabled{% endif %}>
+    {% if f.key in secrets_present and not disabled %}
+    <label class="inline-check"><input type="checkbox" name="{{ f.key }}__loeschen" value="1"> gespeichertes Passwort löschen</label>
+    {% endif %}
+  {% elif f.type == 'color' %}
+    <input type="color" id="{{ f.key }}" name="{{ f.key }}" value="{{ value or f.default }}" {% if disabled %}disabled{% endif %}>
+  {% else %}
+    <input type="{% if f.type == 'email' %}email{% else %}text{% endif %}" id="{{ f.key }}" name="{{ f.key }}" value="{{ value }}"
+           {% if f.type in ('int', 'decimal', 'price') %}inputmode="decimal" class="num"{% elif f.type == 'digits' %}inputmode="numeric"{% endif %}
+           {% if f.placeholder %}placeholder="{{ f.placeholder }}"{% endif %} {% if disabled %}disabled{% endif %}>
+  {% endif %}
+  {% if f.help %}<p class="help">{{ f.help }}</p>{% endif %}
+  {% if err %}<p class="error">{{ err }}</p>{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}

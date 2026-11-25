@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Postfach-Diagnose{% endblock %}
+{% block content %}
+<p><a href="/einstellungen/email">← Einstellungen E-Mail</a></p>
+<h1>Postfach-Diagnose</h1>
+<section class="card">
+  {% if not report.configured %}
+    <p>Es ist noch kein Postfach eingetragen (Server, Benutzername und Passwort).</p>
+  {% elif report.error %}
+    <div class="notice fehler">{{ report.error }}</div>
+    <p class="help">Bitte Server, Port, Verschlüsselung, Benutzername und Passwort prüfen.</p>
+  {% else %}
+    <div class="notice ok">Verbindung und Anmeldung erfolgreich.</div>
+    <table class="table compact">
+      <tr><td>Rechnungs-Ordner</td><td>{% if report.inbox %}<strong>{{ report.inbox }}</strong>{% else %}„{{ report.inbox_wanted }}“ nicht gefunden – wird beim ersten Abruf angelegt und abonniert{% endif %}</td></tr>
+      <tr><td>Ordner nach Import</td><td>{% if not report.done_wanted %}– (Mails werden nicht verschoben){% elif report.done %}<strong>{{ report.done }}</strong>{% else %}„{{ report.done_wanted }}“ nicht gefunden – wird beim ersten Abruf angelegt und abonniert{% endif %}</td></tr>
+      <tr><td>Entwürfe-Ordner</td><td>{% if report.drafts %}<strong>{{ report.drafts }}</strong>{% else %}<span class="error">nicht gefunden – bitte den Namen in den Einstellungen eintragen</span>{% endif %}</td></tr>
+      <tr><td>Server kann</td><td>{{ report.capabilities|join(', ') or '–' }}
+        {% if 'MOVE' not in report.capabilities %}<br><span class="help">Ohne MOVE wird kopiert, nachgezählt und erst dann entfernt{% if 'UIDPLUS' not in report.capabilities %} – ohne UIDPLUS wird zur Sicherheit gar nicht verschoben{% endif %}.</span>{% endif %}</td></tr>
+      <tr><td>Ordner-Trennzeichen</td><td><code>{{ report.delimiter or '–' }}</code></td></tr>
+    </table>
+    <h2>Ordner auf dem Server</h2>
+    <table class="table compact">
+      <thead><tr><th>Ordner</th><th class="num">Mails</th></tr></thead>
+      {% for name, count in report.folders %}<tr><td>{{ name }}</td><td class="num">{{ count if count is not none else '–' }}</td></tr>{% endfor %}
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

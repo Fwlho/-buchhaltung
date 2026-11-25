@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ dunning.level_name }} {{ dunning.number }}{% endblock %}
+{% block mainclass %}page wide{% endblock %}
+{% block content %}
+<p><a href="/mahnwesen">← Mahnwesen</a> · <a href="/rechnungen/{{ doc.id }}">Rechnung {{ doc.number }}</a></p>
+<h1>{{ dunning.level_name }} <small>{{ dunning.number }} vom {{ dunning.dunning_date|datum }}</small></h1>
+<div class="split">
+  <div>
+    <section class="card">
+      <table class="table compact">
+        <tr><td>Kunde</td><td>{{ doc.recipient_name }}</td></tr>
+        <tr><td>Rechnung</td><td>{{ doc.number }} vom {{ doc.doc_date|datum }}, fällig am {{ doc.due_date|datum }}</td></tr>
+        <tr><td>Offener Rechnungsbetrag</td><td class="num">{{ dunning.open_amount|geld }}</td></tr>
+        {% if dunning.fees %}<tr><td>Mahngebühren (gesamt)</td><td class="num">{{ dunning.fees|geld }}</td></tr>{% endif %}
+        {% if dunning.interest %}<tr><td>Verzugszinsen</td><td class="num">{{ dunning.interest|geld }}</td></tr>{% endif %}
+        <tr class="sum"><td>Zu zahlen bis {{ dunning.pay_until|datum }}</td><td class="num">{{ dunning.total|geld }}</td></tr>
+      </table>
+      <p class="help">Das PDF wurde beim Erstellen einmal erzeugt und wird unverändert gespeichert.
+        Gezahlte Mahngebühren und Zinsen bitte bei Zahlungseingang gesondert berücksichtigen – erfasst wird an der
+        Rechnung nur der Rechnungsbetrag.</p>
+      <p><a class="btn secondary" href="/mahnwesen/{{ dunning.id }}/pdf" target="_blank" rel="noopener">PDF öffnen</a></p>
+    </section>
+    {% if others|length > 1 %}
+    <section class="card">
+      <h2>Alle Mahnungen zu dieser Rechnung</h2>
+      <ul>{% for o in others %}<li><a href="/mahnwesen/{{ o.id }}">{{ o.level_name }} {{ o.number }}</a> vom {{ o.dunning_date|datum }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+    {% if can_edit %}{% include "_email_entwurf.html" %}{% endif %}
+  </div>
+  <section class="card preview">
+    <iframe src="/mahnwesen/{{ dunning.id }}/pdf" title="Vorschau der Mahnung"></iframe>
+  </section>
+</div>
+{% endblock %}

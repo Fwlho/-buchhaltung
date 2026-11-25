@@ -1,0 +1,40 @@
+{# E-Mail-Entwurf. Erwartet: mail (to/subject/body), mail_errors, mail_action, mail_configured, draft_at #}
+<section class="card">
+  <h2>Per E-Mail senden</h2>
+  {% set mail_programs = mail_programs_available() %}
+  <p class="help">Das Programm verschickt selbst nichts:
+    {% if mail_programs %}Es öffnet in Ihrem Mailprogramm ein fertig ausgefülltes neues Mail-Fenster mit PDF-Anhang.
+    {% else %}Es legt einen fertigen Entwurf mit PDF-Anhang in den Entwürfe-Ordner Ihres Postfachs.{% endif %}
+    Sie prüfen die Mail und klicken in Ihrem Mailprogramm selbst auf „Senden“.</p>
+  {% if draft_at %}<p class="notice ok">Entwurf erstellt am {{ draft_at|datumzeit }}.</p>{% endif %}
+  {% if mail_errors._ %}<div class="notice fehler">{{ mail_errors._ }}</div>{% endif %}
+  <form method="post" action="{{ mail_action }}" novalidate>
+    {{ csrf_input }}
+    <div class="field {% if mail_errors.to %}has-error{% endif %}">
+      <label for="mail_to">An</label>
+      <input type="text" id="mail_to" name="to" value="{{ mail.to }}" placeholder="kunde@example.de">
+      {% if mail_errors.to %}<p class="error">{{ mail_errors.to }}</p>{% endif %}
+    </div>
+    <div class="field {% if mail_errors.subject %}has-error{% endif %}">
+      <label for="mail_subject">Betreff</label>
+      <input type="text" id="mail_subject" name="subject" value="{{ mail.subject }}">
+      {% if mail_errors.subject %}<p class="error">{{ mail_errors.subject }}</p>{% endif %}
+    </div>
+    <div class="field">
+      <label for="mail_body">Text</label>
+      <textarea id="mail_body" name="body" rows="7">{{ mail.body }}</textarea>
+    </div>
+    <div class="actions">
+      {% for key, label in mail_programs.items() %}
+      <button type="submit" name="aktion" value="{{ key }}" class="btn primary">In {{ label }} öffnen</button>
+      {% endfor %}
+      {% if mail_configured %}
+      <button type="submit" name="aktion" value="entwurf" class="btn {{ 'secondary' if mail_programs else 'primary' }}">Entwurf im Postfach anlegen</button>
+      {% endif %}
+      <button type="submit" name="aktion" value="eml" class="btn secondary">Als .eml-Datei herunterladen</button>
+      {% if not mail_configured and not mail_programs %}
+      <span class="help">Für Entwürfe im Postfach bitte unter Einstellungen → E-Mail das Postfach eintragen.</span>
+      {% endif %}
+    </div>
+  </form>
+</section>

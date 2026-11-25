@@ -1,0 +1,39 @@
+{# Sichtansicht einer XRechnung (XML). Erwartet: einvoice (erechnung.Parsed) oder einvoice_error #}
+<div class="einvoice">
+  {% if einvoice %}
+  {% set r = einvoice.result %}
+  <h2>E-Rechnung <small>{{ 'Gutschrift' if einvoice.credit_note else 'Rechnung' }} · Format {{ einvoice.format }}</small></h2>
+  <table class="table compact">
+    <tr><td>Rechnungsnummer</td><td><strong>{{ r.number or '–' }}</strong></td></tr>
+    <tr><td>Rechnungsdatum</td><td>{{ r.doc_date|datum }}</td></tr>
+    {% if r.due_date %}<tr><td>Fällig am</td><td>{{ r.due_date|datum }}</td></tr>{% endif %}
+    <tr><td>Verkäufer</td><td>{{ r.partner_name or '–' }}{% if einvoice.seller_vat %}<br><span class="help">USt-IdNr. {{ einvoice.seller_vat }}</span>{% endif %}</td></tr>
+    <tr><td>Käufer</td><td>{{ einvoice.buyer_name or '–' }}{% if einvoice.buyer_reference %}<br><span class="help">Käuferreferenz / Leitweg-ID {{ einvoice.buyer_reference }}</span>{% endif %}</td></tr>
+    {% if einvoice.seller_iban %}<tr><td>IBAN des Verkäufers</td><td>{{ einvoice.seller_iban }}</td></tr>{% endif %}
+    {% if einvoice.payment_terms %}<tr><td>Zahlungsbedingungen</td><td>{{ einvoice.payment_terms_readable }}</td></tr>{% endif %}
+  </table>
+  {% if einvoice.items %}
+  <h3>Positionen</h3>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Bezeichnung</th><th class="num">Menge</th><th class="num">Preis</th><th class="num">USt</th><th class="num">Netto</th></tr></thead>
+    {% for i in einvoice.items %}
+    <tr><td><strong>{{ i.name }}</strong>{% if i.description %}<br><span class="help">{{ i.description }}</span>{% endif %}</td>
+      <td class="num nowrap">{% if i.quantity is not none %}{{ i.quantity|preis }} {{ i.unit }}{% endif %}</td>
+      <td class="num nowrap">{% if i.price is not none %}{{ i.price|preis }} €{% endif %}</td>
+      <td class="num nowrap">{% if i.rate is not none %}{{ i.rate|prozent }}{% endif %}</td>
+      <td class="num nowrap">{% if i.net is not none %}{{ i.net|geld }}{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% endif %}
+  <table class="table compact">
+    {% for line in r.lines %}<tr><td>USt {{ line.rate|prozent }} auf {{ line.net|geld }}</td><td class="num">{{ line.vat|geld }}</td></tr>{% endfor %}
+    {% if einvoice.totals.brutto is defined %}<tr class="sum"><td>Gesamtbetrag</td><td class="num">{{ einvoice.totals.brutto|geld }}</td></tr>{% endif %}
+    {% if einvoice.totals.zahlbetrag is defined %}<tr><td>Zahlbetrag</td><td class="num">{{ einvoice.totals.zahlbetrag|geld }}</td></tr>{% endif %}
+  </table>
+  {% else %}
+  <p class="notice fehler">Die XML-Datei kann nicht angezeigt werden: {{ einvoice_error }}</p>
+  {% endif %}
+  <p class="help"><a href="{{ area }}/{{ doc.id }}/datei" download>Original-XML herunterladen</a></p>
+</div>

@@ -1,0 +1,15 @@
+{# Suchleiste für Stammdaten-Listen. Erwartet: base_url, q, archived, new_url (optional), new_label #}
+<form method="get" action="{{ base_url }}" class="searchbar">
+  <label class="sr-only" for="q">Suchen</label>
+  <input type="search" id="q" name="q" value="{{ q }}" placeholder="Suchen …">
+  {% if archived %}<input type="hidden" name="archiv" value="1">{% endif %}
+  <button type="submit" class="btn secondary">Suchen</button>
+  {% if q %}<a class="btn link" href="{{ base_url }}{% if archived %}?archiv=1{% endif %}">Suche zurücksetzen</a>{% endif %}
+  <span class="spacer"></span>
+  {% if archived %}
+    <a class="btn link" href="{{ base_url }}">Aktive anzeigen</a>
+  {% else %}
+    <a class="btn link" href="{{ base_url }}?archiv=1">Archiv anzeigen</a>
+  {% endif %}
+  {% if new_url %}<a class="btn primary" href="{{ new_url }}">{{ new_label }}</a>{% endif %}
+</form>

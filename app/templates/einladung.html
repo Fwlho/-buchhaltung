@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Einladung{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Einladung zu {{ tenant_name }}</h1>
+  <form method="post" action="/einladung/{{ token }}" novalidate>
+    {{ csrf_input }}
+    {% if existing %}
+      <p>Für <strong>{{ inv.email }}</strong> gibt es bereits ein Konto. Bitte bestätigen Sie die Einladung mit Ihrem Passwort.</p>
+      <div class="field {% if errors.password %}has-error{% endif %}">
+        <label for="password">Passwort</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
+        {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+      </div>
+    {% else %}
+      <p>Legen Sie Ihr Konto für <strong>{{ inv.email }}</strong> an.</p>
+      <div class="field {% if errors.name %}has-error{% endif %}">
+        <label for="name">Ihr Name</label>
+        <input type="text" id="name" name="name" value="{{ name }}" required autofocus>
+        {% if errors.name %}<p class="error">{{ errors.name }}</p>{% endif %}
+      </div>
+      <div class="field {% if errors.password %}has-error{% endif %}">
+        <label for="password">Passwort (mindestens 10 Zeichen)</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required>
+      </div>
+      <div class="field {% if errors.password %}has-error{% endif %}">
+        <label for="password2">Passwort wiederholen</label>
+        <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+        {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+      </div>
+    {% endif %}
+    <div class="actions"><button type="submit" class="btn primary">Einladung annehmen</button></div>
+  </form>
+</section>
+{% endblock %}

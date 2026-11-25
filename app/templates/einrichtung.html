@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Einrichtung – {{ group.title }}{% endblock %}
+{% block content %}
+<h1>Einrichtung Ihrer Firma</h1>
+<ol class="steps">
+  {% for g in steps %}
+  <li class="{% if loop.index == step %}current{% elif g.title not in missing %}done{% endif %}">
+    <a href="/einrichtung/{{ g.key }}">{{ loop.index }}. {{ g.title }}</a>
+  </li>
+  {% endfor %}
+  <li><a href="/einrichtung/abschluss">Abschluss</a></li>
+</ol>
+<section class="card">
+  <h2>Schritt {{ step }} von {{ steps|length }}: {{ group.title }}</h2>
+  {% set action = '/einrichtung/' ~ group.key %}
+  {% set submit_label = 'Speichern und weiter' %}
+  {% set disabled = False %}
+  {% set back_url = '/einrichtung/design' %}
+  {% set prev_url = ('/einrichtung/' ~ steps[step - 2].key) if step > 1 else None %}
+  {% include "_gruppe_form.html" %}
+</section>
+{% endblock %}

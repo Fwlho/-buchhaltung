@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Neue Rechnung{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<p><a href="/rechnungen">← Rechnungen</a></p>
+<h1>Neue Rechnung</h1>
+<section class="card">
+  {% if customers %}
+  <form method="post" action="/rechnungen/neu">
+    {{ csrf_input }}
+    <div class="field">
+      <label for="customer_id">Kunde</label>
+      <select id="customer_id" name="customer_id" required>
+        <option value="">– bitte wählen –</option>
+        {% for c in customers %}<option value="{{ c.id }}" {% if preselect == c.id|string %}selected{% endif %}>{{ c.number }} – {{ c.name }}{% if c.city %} ({{ c.city }}){% endif %}</option>{% endfor %}
+      </select>
+      <p class="help">Empfänger-Adresse, Zahlungsziel und Objektadressen werden aus den Kundendaten übernommen.</p>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Entwurf anlegen</button></div>
+  </form>
+  {% else %}
+  <p>Es gibt noch keine Kunden.</p>
+  {% endif %}
+  {% if can_create_customer %}<p class="help"><a href="/kunden/neu">Neuen Kunden anlegen</a></p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,9 @@
+{# Unterpunkte der Einstellungen (Liste links). Erwartet: groups, active (Gruppen-Schlüssel, „protokoll“ oder „sicherung“) #}
+<nav class="card subnav" aria-label="Einstellungen">
+  {% for g in groups %}
+  <a href="/einstellungen/{{ g.key }}"{% if g.key == active %} class="active" aria-current="page"{% endif %}>{{ g.title }}</a>
+  {% endfor %}
+  <hr>
+  <a href="/einstellungen/protokoll"{% if active == 'protokoll' %} class="active" aria-current="page"{% endif %}>Änderungsprotokoll</a>
+  <a href="/datensicherung"{% if active == 'sicherung' %} class="active" aria-current="page"{% endif %}>Datensicherung &amp; Export</a>
+</nav>

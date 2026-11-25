@@ -1,0 +1,27 @@
+{# Häkchen „Bezahlt“ für Rechnungslisten (Ausgangs- und Eingangsrechnungen). Einbinden mit
+   {% from "_bezahlt.html" import paid_box, paid_forms with context %} – nutzt can_edit, can_finalize, today.
+   base = "/rechnungen" oder "/eingangsrechnungen"; back = Rücksprung-Adresse (Liste mit Filtern).
+   Ausgangsrechnungen nur festgeschrieben; Eingangsrechnungen auch als Entwurf (die erste Zahlung schreibt sie fest). #}
+{% macro _payable(d, base) -%}
+{{- 'ja' if d.kind == 'rechnung' and d.status in ('offen', 'bezahlt') and d.gross_total and d.gross_total > 0
+      and (d.is_final or base == '/eingangsrechnungen') else '' -}}
+{%- endmacro %}
+
+{% macro paid_box(d, back, base) -%}
+{% if _payable(d, base) %}
+  {% if d.status == 'bezahlt' %}
+    {% if can_edit and can_finalize %}<button type="submit" form="unbezahlt-{{ d.id }}" class="paid-box on" title="Häkchen entfernen (Zahlung wird wieder gelöscht)" aria-label="Rechnung {{ d.number }} bezahlt – Häkchen entfernen">✓</button>
+    {% else %}<span class="paid-box on" role="img" aria-label="bezahlt">✓</span>{% endif %}
+  {% elif can_edit %}
+    <span class="paid-cell"><button type="submit" form="bezahlt-{{ d.id }}" class="paid-box" title="Als bezahlt markieren (offener Betrag zum Datum daneben)" aria-label="Rechnung {{ d.number }} als bezahlt markieren"></button>
+      <input type="text" name="paid_on" value="{{ today }}" form="bezahlt-{{ d.id }}" class="date-mini" aria-label="Bezahlt am" placeholder="TT.MM.JJJJ"></span>
+  {% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro paid_forms(d, back, base) -%}
+{% if _payable(d, base) %}
+<form method="post" action="{{ base }}/{{ d.id }}/bezahlt" id="bezahlt-{{ d.id }}">{{ csrf_input }}<input type="hidden" name="zurueck" value="{{ back }}"></form>
+<form method="post" action="{{ base }}/{{ d.id }}/unbezahlt" id="unbezahlt-{{ d.id }}">{{ csrf_input }}<input type="hidden" name="zurueck" value="{{ back }}"></form>
+{% endif %}
+{%- endmacro %}

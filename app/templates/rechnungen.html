@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Rechnungen{% endblock %}
+{% from "_bezahlt.html" import paid_box, paid_forms with context %}
+{% block content %}
+<h1>Ausgangsrechnungen</h1>
+<form method="get" action="/rechnungen" class="searchbar">
+  <label class="sr-only" for="q">Suchen</label>
+  <input type="search" id="q" name="q" value="{{ q }}" placeholder="Kunde oder Rechnungsnummer …">
+  <select name="status" class="compact" aria-label="Status">
+    <option value="">alle</option>
+    {% for s, label in [('entwurf', 'Entwürfe'), ('offen', 'offen'), ('bezahlt', 'bezahlt'), ('storniert', 'storniert')] %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="jahr" class="compact" aria-label="Jahr">
+    <option value="">alle Jahre</option>
+    {% for y in years %}<option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <label class="inline-check"><input type="checkbox" name="ueberfaellig" value="1" {% if overdue %}checked{% endif %}> nur überfällige</label>
+  <button type="submit" class="btn secondary">Filtern</button>
+  <span class="spacer"></span>
+  {% if contracts_on %}<a class="btn secondary" href="/vertraege">Verträge</a>{% endif %}
+  <a class="btn secondary" href="/rechnungen/import">Alte Rechnungen hochladen{% if import_pending %} ({{ import_pending }} zu prüfen){% endif %}</a>
+  {% if can_edit %}<a class="btn primary" href="/rechnungen/neu">Neue Rechnung</a>{% endif %}
+</form>
+
+<form method="post" action="/rechnungen/auswahl" target="_blank">
+  {{ csrf_input }}
+  <section class="card">
+    {% if docs %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th><span class="sr-only">Auswahl</span></th><th>Nr.</th><th>Datum</th><th>Kunde</th>
+        <th class="num">Netto</th><th class="num">Brutto</th><th class="num">Offen</th><th>Fällig</th><th>Status</th><th>Bezahlt</th>
+      </tr></thead>
+      <tbody>
+      {% for d in docs %}
+      <tr class="{% if d.status == 'storniert' %}cancelled{% endif %}">
+        <td>{% if d.file %}<input type="checkbox" name="ids" value="{{ d.id }}" aria-label="Rechnung {{ d.number }} auswählen">{% endif %}</td>
+        <td class="nowrap"><a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a>
+          {% if d.kind == 'storno' %}<span class="badge">Storno</span>{% endif %}
+          {% if d.source == 'import' %}<span class="badge">importiert</span>{% endif %}
+          {% if d.contract_id and d.is_draft %}<span class="badge">aus Vertrag</span>{% endif %}</td>
+        <td class="nowrap">{{ d.doc_date|datum }}</td>
+        <td>{{ d.recipient_name }}</td>
+        <td class="num nowrap">{{ d.net_total|geld }}</td>
+        <td class="num nowrap">{{ d.gross_total|geld }}</td>
+        <td class="num nowrap">{% if d.is_final and d.open_amount > 0 %}{{ d.open_amount|geld }}{% endif %}</td>
+        <td class="nowrap {% if d.is_final and d.status == 'offen' and d.due_date and d.due_date < today_date %}overdue{% endif %}">{% if d.is_final %}{{ d.due_date|datum }}{% endif %}</td>
+        <td>{% if d.is_draft %}<span class="badge">Entwurf</span>{% else %}<span class="badge {{ {'bezahlt': 'ok', 'storniert': 'danger'}.get(d.status, '') }}">{{ d.status_label }}</span>{% endif %}</td>
+        <td class="nowrap">{{ paid_box(d, list_url, '/rechnungen') }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="4"><strong>Summe festgeschriebener Rechnungen (ohne Storno)</strong></td>
+        <td class="num nowrap"><strong>{{ sums.net|geld }}</strong></td>
+        <td class="num nowrap"><strong>{{ sums.gross|geld }}</strong></td>
+        <td class="num nowrap"><strong>{{ sums.open|geld }}</strong></td>
+        <td colspan="3"></td>
+      </tr></tfoot>
+    </table>
+    </div>
+    <div class="row">
+      <span class="help">Ausgewählte:</span>
+      <button type="submit" name="aktion" value="drucken" class="btn small secondary">Drucken (PDF)</button>
+      <button type="submit" name="aktion" value="zip" class="btn small secondary">Als ZIP herunterladen</button>
+    </div>
+    {% else %}
+    <p>{% if q or status or year or overdue %}Keine Rechnungen für diese Auswahl.{% else %}Noch keine Rechnungen erstellt.{% endif %}</p>
+    {% endif %}
+  </section>
+</form>
+{# Formulare für die Häkchen – außerhalb der Auswahl-Liste, weil Formulare nicht ineinander liegen dürfen #}
+{% for d in docs %}{{ paid_forms(d, list_url, '/rechnungen') }}{% endfor %}
+{% endblock %}

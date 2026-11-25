@@ -1,0 +1,20 @@
+{# Zeitraum-Auswahl. Erwartet: action, period, years, months, q (Abfrageparameter) #}
+<form method="get" action="{{ action }}" class="searchbar">
+  <label class="sr-only" for="zeitraum">Zeitraum</label>
+  <select id="zeitraum" name="zeitraum" class="compact">
+    {% for key, label in [('jahr', 'Jahr'), ('quartal', 'Quartal'), ('monat', 'Monat'), ('frei', 'frei wählen')] %}
+    <option value="{{ key }}" {% if period.kind == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <select name="jahr" class="compact" aria-label="Jahr">
+    {% for y in years %}<option value="{{ y }}" {% if period.year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <select name="nr" class="compact" aria-label="Quartal oder Monat">
+    <option value="">–</option>
+    {% for i in range(1, 5) %}<option value="{{ i }}" {% if period.kind == 'quartal' and period.nr == i %}selected{% endif %}>{{ i }}. Quartal</option>{% endfor %}
+    {% for m in months %}<option value="{{ loop.index }}" {% if period.kind == 'monat' and period.nr == loop.index %}selected{% endif %}>{{ m }}</option>{% endfor %}
+  </select>
+  <input type="text" name="von" value="{{ q.get('von', '') }}" placeholder="von TT.MM.JJJJ" class="short" aria-label="von">
+  <input type="text" name="bis" value="{{ q.get('bis', '') }}" placeholder="bis TT.MM.JJJJ" class="short" aria-label="bis">
+  <button type="submit" class="btn secondary">Anzeigen</button>
+</form>
+<p class="help">Bei „Quartal“ bzw. „Monat“ in der zweiten Auswahl das passende Quartal bzw. den Monat wählen; „von/bis“ nur bei „frei wählen“.</p>

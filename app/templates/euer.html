@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}EÜR {{ period.label }}{% endblock %}
+{% block content %}
+<h1>Einnahmen-Überschuss-Rechnung <small>{{ period.label }}</small></h1>
+{% set action = '/euer' %}
+{% include "_zeitraum.html" %}
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+
+<div class="tiles">
+  <section class="card tile kpi"><h2>Betriebseinnahmen</h2><p class="big">{{ result.income_total|geld }}</p>
+    <p class="help">netto {{ result.income_net|geld }}</p></section>
+  <section class="card tile kpi"><h2>Betriebsausgaben</h2><p class="big">{{ result.expense_total|geld }}</p>
+    <p class="help">netto {{ result.expense_net|geld }}</p></section>
+  <section class="card tile kpi"><h2>{{ 'Überschuss' if result.surplus >= 0 else 'Verlust' }}</h2>
+    <p class="big {{ 'neg' if result.surplus < 0 else '' }}">{{ result.surplus|geld }}</p></section>
+</div>
+
+<section class="card">
+  <div class="row between">
+    <h2>Aufstellung</h2>
+    <div class="row">
+      <a class="btn small secondary" href="/euer/export.pdf?{{ query }}" target="_blank" rel="noopener">PDF</a>
+      <a class="btn small secondary" href="/euer/export.csv?{{ query }}">CSV (Excel)</a>
+    </div>
+  </div>
+  <p class="help">Nach Zahlungsdatum (Zufluss/Abfluss). Nur geprüfte Belege – der Prüfbereich zählt nicht mit.
+    Die Bezeichnungen entsprechen den Positionen der Anlage EÜR (Vorschlag).</p>
+  <table class="table euer">
+    <tr class="head"><td colspan="2">Betriebseinnahmen</td></tr>
+    {% for g in result.income %}
+      <tr class="group"><td>{{ g.label }}</td><td class="num">{{ g.net|geld }}</td></tr>
+      {% for account, (label, net) in g.accounts.items() %}
+      <tr class="detail"><td>{{ account }} {{ label }}</td><td class="num">{{ net|geld }}</td></tr>{% endfor %}
+    {% else %}<tr class="detail"><td>keine Einnahmen im Zeitraum</td><td></td></tr>{% endfor %}
+    <tr class="group"><td>{{ vat_received_label }}</td><td class="num">{{ result.vat_received|geld }}</td></tr>
+    {% if result.vat_refund %}<tr class="group"><td>Vom Finanzamt erstattete Umsatzsteuer</td><td class="num">{{ result.vat_refund|geld }}</td></tr>{% endif %}
+    <tr class="sum"><td>Summe Betriebseinnahmen</td><td class="num">{{ result.income_total|geld }}</td></tr>
+
+    <tr class="head"><td colspan="2">Betriebsausgaben</td></tr>
+    {% for g in result.expenses %}
+      <tr class="group"><td>{{ g.label }}</td><td class="num">{{ g.net|geld }}</td></tr>
+      {% for account, (label, net) in g.accounts.items() %}
+      <tr class="detail"><td>{% if account != label %}{{ account }} {% endif %}{{ label }}</td><td class="num">{{ net|geld }}</td></tr>{% endfor %}
+    {% else %}<tr class="detail"><td>keine Ausgaben im Zeitraum</td><td></td></tr>{% endfor %}
+    <tr class="group"><td>{{ vat_paid_label }}</td><td class="num">{{ result.vat_paid|geld }}</td></tr>
+    {% if result.vat_to_office %}<tr class="group"><td>An das Finanzamt gezahlte Umsatzsteuer</td><td class="num">{{ result.vat_to_office|geld }}</td></tr>{% endif %}
+    <tr class="sum"><td>Summe Betriebsausgaben</td><td class="num">{{ result.expense_total|geld }}</td></tr>
+
+    <tr class="grand"><td>{{ 'Überschuss' if result.surplus >= 0 else 'Verlust' }}</td><td class="num">{{ result.surplus|geld }}</td></tr>
+  </table>
+  {% if result.hints %}<ul class="help">{% for h in result.hints %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+</section>
+{% endblock %}

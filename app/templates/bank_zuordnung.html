@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Spalten zuordnen{% endblock %}
+{% block content %}
+<p><a href="/bank">← Bankabgleich</a></p>
+<h1>CSV-Spalten zuordnen <small>{{ imp.file.original_name }}</small></h1>
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+<section class="card">
+  <p class="intro">Jede Bank baut ihre CSV-Datei etwas anders auf. Bitte prüfen Sie, welche Spalte was enthält.
+    {% if known %}Diese Zuordnung haben Sie für diese Bank schon einmal gespeichert.{% else %}Das Programm hat einen
+    Vorschlag gemacht; er wird nach dem Einlesen für diese Bank gespeichert.{% endif %}</p>
+  <form method="post" action="/bank/import/{{ imp.id }}">
+    {{ csrf_input }}
+    <div class="grid">
+      {% for key, label in fields %}
+      <div class="field">
+        <label for="f-{{ key }}">{{ label }}</label>
+        <select id="f-{{ key }}" name="{{ key }}">
+          <option value="">– nicht vorhanden –</option>
+          {% for h in header %}{% if h %}<option value="{{ h }}" {% if mapping.get(key) == h %}selected{% endif %}>{{ h }}</option>{% endif %}{% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="help">Entweder eine Spalte „Betrag“ mit Vorzeichen (Minus = Ausgang) oder zwei Spalten für Soll (Ausgang) und Haben (Eingang).</p>
+    <div class="actions"><button type="submit" class="btn primary">Umsätze einlesen</button></div>
+  </form>
+</section>
+<section class="card">
+  <h2>Die ersten Zeilen der Datei</h2>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr>{% for h in header %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+    {% for row in sample %}<tr>{% for c in row %}<td>{{ c[:60] }}</td>{% endfor %}</tr>{% endfor %}
+  </table>
+  </div>
+</section>
+{% endblock %}

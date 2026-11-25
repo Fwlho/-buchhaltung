@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Admin-Passwort vergessen{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Admin-Passwort vergessen</h1>
+  <p>Zum Schutz brauchen Sie dafür zwei Dinge: einen <strong>Bestätigungscode per E-Mail</strong>
+     und Ihr <strong>Anmelde-Passwort</strong>. Danach legen Sie ein neues Admin-Passwort fest.</p>
+  {% if info %}<div class="notice {{ info_kind }}">{{ info }}</div>{% endif %}
+  {% if not code_sent %}
+  <form method="post" action="/admin-passwort/vergessen/code">
+    {{ csrf_input }}
+    <input type="hidden" name="weiter" value="{{ weiter }}">
+    <div class="actions">
+      <a class="btn secondary" href="/admin-passwort?weiter={{ weiter|urlencode }}">Zurück</a>
+      <button type="submit" class="btn primary">Code per E-Mail senden</button>
+    </div>
+  </form>
+  {% else %}
+  <form method="post" action="/admin-passwort/vergessen" novalidate>
+    {{ csrf_input }}
+    <input type="hidden" name="weiter" value="{{ weiter }}">
+    <div class="field {% if errors.code %}has-error{% endif %}">
+      <label for="code">Bestätigungscode aus der E-Mail</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+             pattern="[0-9 ]*" class="code-input" required autofocus>
+      {% if errors.code %}<p class="error">{{ errors.code }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.login_password %}has-error{% endif %}">
+      <label for="login_password">Ihr Anmelde-Passwort</label>
+      <input type="password" id="login_password" name="login_password" autocomplete="current-password" required>
+      {% if errors.login_password %}<p class="error">{{ errors.login_password }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password">Neues Admin-Passwort (mindestens 10 Zeichen, anders als das Anmelde-Passwort)</label>
+      <input type="password" id="password" name="password" autocomplete="new-password" required>
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password2">Neues Admin-Passwort wiederholen</label>
+      <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+      {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Neues Admin-Passwort festlegen</button></div>
+  </form>
+  <form method="post" action="/admin-passwort/vergessen/code" class="row">
+    {{ csrf_input }}
+    <input type="hidden" name="weiter" value="{{ weiter }}">
+    <button type="submit" class="btn link">Neuen Code anfordern</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

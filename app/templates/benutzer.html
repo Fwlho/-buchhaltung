@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Benutzer{% endblock %}
+{% block content %}
+<h1>Benutzer</h1>
+{% if info %}<div class="notice {{ info_kind }}">{{ info }}</div>{% endif %}
+{% if new_link %}
+<div class="card linkbox">
+  <p><strong>Einladungs-Link für {{ new_link_for }}</strong> (7 Tage gültig, wird nur jetzt angezeigt):</p>
+  <input type="text" readonly value="{{ new_link }}" class="copy">
+</div>
+{% endif %}
+
+<section class="card">
+  <div class="row between">
+    <h2>Mitglieder dieser Firma</h2>
+    <a class="btn small secondary" href="/benutzer/matrix">Zugriffsmatrix – alle Rechte auf einen Blick</a>
+  </div>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for m in members %}
+    <tr>
+      <td>{{ m.user.name }}</td>
+      <td>{{ m.user.email }}</td>
+      <td>{{ role_labels.get(m.role, m.role) }}</td>
+      <td><span class="badge {{ 'ok' if m.is_active else 'danger' }}">{{ 'aktiv' if m.is_active else 'gesperrt' }}</span></td>
+      <td>{% if can_edit %}<a class="btn small secondary" href="/benutzer/{{ m.id }}">Rechte bearbeiten</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+{% if invitations %}
+<section class="card">
+  <h2>Offene Einladungen</h2>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>E-Mail</th><th>Rolle</th><th>Gültig bis</th><th></th></tr></thead>
+    <tbody>
+    {% for inv in invitations %}
+    <tr>
+      <td>{{ inv.email }}</td>
+      <td>{{ role_labels.get(inv.role, inv.role) }}</td>
+      <td>{{ inv.expires_at|datumzeit }}</td>
+      <td>{% if can_edit %}
+        <form method="post" action="/benutzer/einladungen/{{ inv.id }}/zurueckziehen">
+          {{ csrf_input }}<button type="submit" class="btn small danger">Zurückziehen</button>
+        </form>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if can_edit %}
+<section class="card">
+  <h2>Person einladen</h2>
+  <p class="intro">Die Person erhält einen Link per E-Mail (7 Tage gültig) und legt damit ihr Passwort fest.
+    Die Rechte werden aus der Rolle vorbelegt und lassen sich danach einzeln anpassen.</p>
+  <form method="post" action="/benutzer/einladen" class="grid" novalidate>
+    {{ csrf_input }}
+    <div class="field">
+      <label for="name">Name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}">
+    </div>
+    <div class="field {% if errors.email %}has-error{% endif %}">
+      <label for="email">E-Mail</label>
+      <input type="email" id="email" name="email" value="{{ form.email }}" required>
+      {% if errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.role %}has-error{% endif %}">
+      <label for="role">Rolle</label>
+      <select id="role" name="role">
+        {% for key, label in roles %}
+        <option value="{{ key }}" {% if (form.role or 'mitarbeiter') == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if errors.role %}<p class="error">{{ errors.role }}</p>{% endif %}
+    </div>
+    <div class="actions wide"><button type="submit" class="btn primary">Einladung erstellen</button></div>
+  </form>
+  <details class="help">
+    <summary>Was dürfen die Rollen?</summary>
+    <ul>
+      <li><strong>Inhaber:</strong> alles inkl. Einstellungen, Benutzerverwaltung, Festschreiben</li>
+      <li><strong>Buchhaltung:</strong> Rechnungen, Prüfbereich, Kunden, Steuern, EÜR, Bank, Mahnwesen, Export</li>
+      <li><strong>Mitarbeiter:</strong> Angebote, Kunden, eigene Rechnungen erstellen (kein Festschreiben)</li>
+      <li><strong>Steuerberater:</strong> alles nur lesen + Export</li>
+    </ul>
+  </details>
+</section>
+{% endif %}
+{% endblock %}

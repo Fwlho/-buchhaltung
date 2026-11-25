@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Verträge{% endblock %}
+{% block content %}
+<p><a href="/rechnungen">← Rechnungen</a></p>
+<h1>Verträge <small>wiederkehrende Leistungen</small></h1>
+<p class="intro">Aus jedem aktiven Vertrag legt das Programm am Monatsanfang automatisch einen Rechnungsentwurf an
+  (je nach Vertrag für den Vormonat oder im Voraus für den laufenden Monat). Die Entwürfe stehen in der
+  Rechnungsliste – prüfen, festschreiben und versenden tun Sie selbst.</p>
+{% if drafts %}<div class="notice hinweis"><strong>{{ drafts }}</strong> Rechnungsentwurf/-entwürfe aus Verträgen warten auf Prüfung.
+  <a href="/rechnungen?status=entwurf">Zu den Entwürfen</a></div>{% endif %}
+
+<section class="card">
+  {% if contracts %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Vertrag</th><th>Kunde</th><th class="num">monatlich netto</th><th>Abrechnung</th><th>Laufzeit</th><th>Nächster Monat</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for c in contracts %}
+    <tr>
+      <td><a href="/vertraege/{{ c.id }}">{{ c.title }}</a></td>
+      <td>{{ c.customer.name }}</td>
+      <td class="num nowrap">{{ c.monthly_net|geld }}</td>
+      <td>{{ 'im Voraus' if c.billing_mode == 'voraus' else 'für den Vormonat' }}</td>
+      <td class="nowrap">ab {{ month_label(c.start_month) }}{% if c.end_month %} bis {{ month_label(c.end_month) }}{% else %}, unbefristet{% endif %}</td>
+      <td class="nowrap">{% if c.status == 'aktiv' %}{{ month_label(c.next_month) }}{% if due[c.id] %} <span class="badge">fällig</span>{% endif %}{% else %}–{% endif %}</td>
+      <td><span class="badge {{ 'ok' if c.status == 'aktiv' else '' }}">{{ c.status_label }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if can_edit %}
+  <form method="post" action="/vertraege/abrechnen" class="row">{{ csrf_input }}
+    <button type="submit" class="btn {{ 'primary' if due_total else 'secondary' }}">Fällige Entwürfe jetzt anlegen{% if due_total %} ({{ due_total }}){% endif %}</button>
+    <span class="help">Läuft sonst automatisch im Hintergrund.</span>
+  </form>
+  {% endif %}
+  {% else %}
+  <p>Noch keine Verträge. Am einfachsten im Angebot mit wiederkehrenden Positionen auf „Vertrag für monatliche
+    Abrechnung anlegen“ klicken – oder hier einen leeren Vertrag anlegen.</p>
+  {% endif %}
+</section>
+
+{% if can_edit %}
+<section class="card">
+  <h2>Neuer Vertrag</h2>
+  <form method="post" action="/vertraege/neu" class="row">
+    {{ csrf_input }}
+    <label class="sr-only" for="customer_id">Kunde</label>
+    <select id="customer_id" name="customer_id" required>
+      <option value="">– Kunde auswählen –</option>
+      {% for k in customers %}<option value="{{ k.id }}">{{ k.name }} ({{ k.number }})</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn secondary">Anlegen</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

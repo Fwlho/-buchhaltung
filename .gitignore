@@ -1,0 +1,19 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/
+sicherungen/
+# nie veröffentlichen: Daten, alte Datenstände, Schlüssel, lokale Einstellungen, interne Prüfberichte
+data*/
+alte_version/
+.installiert.json
+.claude/
+SICHERHEITSPRUEFUNG.md
+PRUEFBERICHT.md
+# Installer-Bau
+installer/.bau/
+installer/build/
+installer/dist/
+*.spec

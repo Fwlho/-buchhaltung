@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Einrichtung abschließen{% endblock %}
+{% block content %}
+<h1>Einrichtung abschließen</h1>
+<ol class="steps">
+  {% for g in steps %}<li class="{% if g.title not in missing %}done{% endif %}"><a href="/einrichtung/{{ g.key }}">{{ loop.index }}. {{ g.title }}</a></li>{% endfor %}
+  <li class="current"><a href="/einrichtung/abschluss">Abschluss</a></li>
+</ol>
+<section class="card">
+  {% if missing %}
+    <div class="notice fehler">Es fehlen noch Pflichtangaben in: {{ missing|join(', ') }}.</div>
+    <p>Bitte die genannten Schritte vervollständigen.</p>
+  {% else %}
+    <p>Alle Pflichtangaben sind vorhanden. Mit „Einrichtung abschließen“ wird das Programm für Ihre Firma freigeschaltet.
+       Sie können alle Angaben später unter <em>Einstellungen</em> ändern.</p>
+    <form method="post" action="/einrichtung/abschluss">
+      {{ csrf_input }}
+      <div class="actions"><button type="submit" class="btn primary">Einrichtung abschließen</button></div>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

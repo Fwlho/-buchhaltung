@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Prüfbereich{% endblock %}
+{% block content %}
+<h1>Prüfbereich</h1>
+<p class="intro">Hier liegen neue Belege (Uploads, Kopien, später auch E-Mail-Import). Sie zählen in
+  <strong>keiner</strong> Liste, Auswertung oder Steuerberechnung mit, bis jemand sie geprüft und übernommen hat.</p>
+{% if can_upload %}<div class="row toolbar"><a class="btn primary" href="/eingangsrechnungen/hochladen">Belege hochladen</a></div>{% endif %}
+
+<section class="card">
+  <h2>E-Mail-Import</h2>
+  {% if mail_configured %}
+    <p class="help">{% if auto_fetch %}Rechnungs-Mails werden automatisch alle {{ interval }} Minuten abgerufen, solange das Programm läuft.
+      {% else %}Der automatische Abruf ist ausgeschaltet – Sie können jederzeit von Hand abrufen.{% endif %}
+      E-Mails werden dabei nie gelöscht, nur verschoben.</p>
+    {% if mail_status %}
+      <p><strong>Letzter Abruf {{ mail_status.zeit }}:</strong> {{ mail_status.meldung }}</p>
+      {% if mail_status.fehler %}<ul class="help">{% for f in mail_status.fehler %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+    {% endif %}
+    {% if can_edit %}
+    <form method="post" action="/pruefbereich/email-abruf" class="row">
+      {{ csrf_input }}<button type="submit" class="btn secondary">Jetzt E-Mails abrufen</button>
+    </form>
+    {% endif %}
+    {% if mail_log %}
+    <details class="help"><summary>Zuletzt importierte Mails</summary>
+      <ul>{% for m in mail_log %}<li>{{ m.created_at|datumzeit }} – {{ m.sender }}: „{{ m.subject }}“ ({% if m.status == 'abgelehnt' %}<strong>nicht übernommen – Mail liegt noch im Postfach</strong>{% else %}{{ m.document_ids|length }} Beleg(e){% endif %}){% if m.note %} – {{ m.note }}{% endif %}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
+  {% else %}
+    <p class="help">Noch kein Postfach eingerichtet.{% if can_settings %} <a href="/einstellungen/email">Postfach einrichten</a>{% endif %}
+      – danach landen Rechnungs-Mails mit PDF- oder XRechnung-Anhang automatisch hier.</p>
+  {% endif %}
+</section>
+{% if folder_local %}
+<section class="card">
+  <h2>Eingangsordner</h2>
+  {% if folder %}
+    <p class="help">Dateien aus <code>{{ folder }}</code> werden {% if folder_auto %}automatisch jede Minute eingelesen, solange das
+      Programm läuft{% else %}eingelesen, wenn Sie auf „Jetzt einlesen“ klicken{% endif %}. Danach liegen sie im Unterordner
+      „verarbeitet“, Problemfälle mit Begründung in „fehler“.</p>
+    {% if folder_status %}<p><strong>Zuletzt {{ folder_status.zeit }}:</strong> {{ folder_status.eingelesen }} Datei(en) eingelesen{% if folder_status.fehler %}, {{ folder_status.fehler|length }} Problemfall/-fälle{% endif %}.</p>{% endif %}
+    {% if can_edit %}
+    <form method="post" action="/pruefbereich/ordner-einlesen" class="row">
+      {{ csrf_input }}<button type="submit" class="btn secondary">Jetzt einlesen</button>
+    </form>
+    {% endif %}
+  {% else %}
+    <p class="help">Noch kein Ordner eingerichtet.{% if can_settings %} <a href="/einstellungen/ordner">Eingangsordner einrichten</a>{% endif %}
+      – danach einfach Rechnungen hineinlegen (auch über ein Netzlaufwerk), sie landen dann hier.</p>
+  {% endif %}
+</section>
+{% endif %}
+<section class="card">
+  {% if docs %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Eingang</th><th>Absender</th><th>Rechnungsnr.</th><th>Datum</th><th class="num">Brutto</th><th>Herkunft</th><th>Hinweis</th></tr></thead>
+    <tbody>
+    {% for d in docs %}
+    <tr>
+      <td class="nowrap">{{ d.created_at|datumzeit }}</td>
+      <td><a href="/pruefbereich/{{ d.id }}">{{ d.partner_name or '(Absender unbekannt)' }}</a></td>
+      <td>{{ d.number or '' }}</td>
+      <td class="nowrap">{{ d.doc_date|datum }}</td>
+      <td class="num nowrap">{{ d.gross_total|geld }}</td>
+      <td>{{ {'upload': 'Upload', 'duplikat': 'Kopie', 'email': 'E-Mail', 'ordner': 'Eingangsordner'}.get(d.source, d.source) }}</td>
+      <td>{% if d.id in dup_ids %}<span class="badge danger">doppelt?</span>{% endif %}
+        {% set ks = ki_status.get(d.id) %}{% if ks == 'kein_beleg' %}<span class="badge danger">kein Beleg?</span>
+        {% elif ks == 'fehler' %}<span class="badge warn" title="Die KI konnte diesen Beleg nicht lesen">KI: nicht gelesen</span>
+        {% elif ks %}<span class="badge ok" title="Von der KI ausgelesen – bitte prüfen">KI gelesen</span>{% endif %}
+        {% if d.review_fields %}<span class="badge warn">bitte prüfen</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p>Der Prüfbereich ist leer.</p>
+  {% endif %}
+</section>
+{% endblock %}

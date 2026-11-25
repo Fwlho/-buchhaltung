@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Beleg {{ doc.number or doc.id }}{% endblock %}
+{% block mainclass %}page wide{% endblock %}
+{% block content %}
+{% set editable = can_edit and doc.is_draft %}
+{% set unsure = doc.review_fields or [] %}
+{% set states = ki_states or {} %}
+{% macro ampel(key) %}{{ {'ok': 'ampel-ok', 'fehlt': 'ampel-fehlt'}.get(states.get(key), '') }}{% endmacro %}
+{% if step_total %}
+<nav class="step-arrows" aria-label="Zwischen den Belegen im Prüfbereich wechseln">
+  {% if step_prev %}<a class="step-arrow left" href="{{ step_prev }}" title="Vorheriger Beleg (nicht gespeicherte Eingaben gehen verloren)" aria-label="Vorheriger Beleg">‹</a>{% endif %}
+  {% if step_next %}<a class="step-arrow right" href="{{ step_next }}" title="Nächster Beleg (nicht gespeicherte Eingaben gehen verloren)" aria-label="Nächster Beleg">›</a>{% endif %}
+</nav>
+{% endif %}
+<p><a href="{{ area }}">← {{ 'Prüfbereich' if doc.pending else 'Eingangsrechnungen' }}</a>{% if step_total %} <small class="help">Beleg {{ step_pos }} von {{ step_total }}</small>{% endif %}</p>
+<h1>{{ doc.partner_name or 'Neuer Beleg' }}{% if doc.number %} <small>Rechnung {{ doc.number }}</small>{% endif %}
+  {% if duplicates %}<span class="badge danger">doppelt?</span>{% endif %}
+  {% if doc.pending %}<span class="badge warn">im Prüfbereich</span>
+  {% elif doc.is_final %}<span class="badge">festgeschrieben</span>{% else %}<span class="badge">Entwurf</span>{% endif %}
+  {% if not doc.pending %}<span class="badge {{ {'bezahlt': 'ok', 'storniert': 'danger'}.get(doc.status, '') }}">{{ doc.status_label }}</span>{% endif %}
+</h1>
+{% if errors._ %}<div class="notice fehler">{{ errors._ }}</div>{% endif %}
+{% if duplicates %}
+<div class="notice fehler"><strong>Doppelt?</strong> Doppelte Werte erkannt, bitte prüfen! Gleicher Absender und gleiche
+  Rechnungsnummer bzw. gleiches Datum und gleicher Betrag wie:
+  {% for d in duplicates %}<a href="{{ '/pruefbereich' if d.pending else '/eingangsrechnungen' }}/{{ d.id }}">{{ d.partner_name or 'ohne Absender' }}
+    {{ d.number or '' }} vom {{ d.doc_date|datum }} ({{ d.gross_total|geld }}{% if d.pending %}, im Prüfbereich{% endif %})</a>{% if not loop.last %}; {% endif %}{% endfor %}.
+  {% if doc.pending %}Ist es wirklich dieselbe Rechnung, diesen Beleg bitte verwerfen.{% endif %}</div>
+{% endif %}
+{% if doc.pending %}
+<div class="notice hinweis">Dieser Beleg zählt noch nirgends mit. Bitte die Angaben mit der Vorschau vergleichen
+  und dann <strong>„Speichern und übernehmen“</strong> wählen.{% if states %} Ampel der KI-Auslese: <span class="ampel-dot ok"></span> grün
+  = sicher erkannt, <span class="ampel-dot pruefen"></span> gelb = bitte prüfen, <span class="ampel-dot fehlt"></span> rot = fehlt oder
+  widersprüchlich.{% elif unsure %} Gelb markierte Felder hat das Programm nicht sicher erkannt.{% endif %}</div>
+{% endif %}
+{% if doc.status == 'storniert' %}<div class="notice fehler">Storniert: {{ doc.cancel_reason }}</div>{% endif %}
+
+<div class="split">
+  <section class="card preview">
+    {% if doc.file %}
+      {% if doc.file.content_type == 'application/pdf' %}
+        <iframe src="{{ area }}/{{ doc.id }}/datei" title="Vorschau des Belegs"></iframe>
+      {% elif doc.file.content_type == 'application/xml' %}
+        {% include "_erechnung_ansicht.html" %}
+      {% else %}
+        <img src="{{ area }}/{{ doc.id }}/datei" alt="Vorschau des Belegs">
+      {% endif %}
+      <p class="help"><a href="{{ area }}/{{ doc.id }}/datei" target="_blank" rel="noopener">{{ doc.file.original_name }} in neuem Fenster öffnen</a></p>
+    {% else %}
+      <p class="help">Keine Datei vorhanden.</p>
+    {% endif %}
+  </section>
+
+  <div>
+    {% include "_ki_auslese.html" %}
+    {# Zahlung erfassen und Festschreiben gehören bei Entwürfen zu diesem Formular (Attribut form=…), damit
+       oben eingetragene, noch nicht gespeicherte Angaben (z. B. das Konto) mitgespeichert werden #}
+    <form method="post" action="{{ area }}/{{ doc.id }}" class="card" id="beleg-form" novalidate>
+      {{ csrf_input }}
+      {% if errors and not errors._ %}<div class="notice fehler">Bitte die markierten Angaben prüfen.</div>{% endif %}
+      <fieldset {% if not editable %}disabled{% endif %}>
+      <div class="grid">
+        <div class="field {% if 'partner' in unsure %}unsure{% endif %} {{ ampel('partner') }}">
+          <label for="partner_name">Absender</label>
+          <input type="text" id="partner_name" name="partner_name" value="{{ v.partner_name }}">
+        </div>
+        <div class="field {% if errors.supplier_id %}has-error{% endif %}">
+          <label for="supplier_id">Lieferant (Stammdaten)</label>
+          <select id="supplier_id" name="supplier_id">
+            <option value="">– nicht zugeordnet –</option>
+            {% for s in suppliers %}<option value="{{ s.id }}" {% if v.supplier_id == s.id|string %}selected{% endif %}>{{ s.number }} {{ s.name }}</option>{% endfor %}
+          </select>
+          {% if errors.supplier_id %}<p class="error">{{ errors.supplier_id }}</p>{% endif %}
+        </div>
+        <div class="field {% if 'number' in unsure %}unsure{% endif %} {{ ampel('number') }} {% if errors.number %}has-error{% endif %}">
+          <label for="number">Rechnungsnummer</label>
+          <input type="text" id="number" name="number" value="{{ v.number }}">
+          {% if errors.number %}<p class="error">{{ errors.number }}</p>{% endif %}
+        </div>
+        <div class="field {% if 'doc_date' in unsure %}unsure{% endif %} {{ ampel('doc_date') }} {% if errors.doc_date %}has-error{% endif %}">
+          <label for="doc_date">Rechnungsdatum</label>
+          <input type="text" id="doc_date" name="doc_date" value="{{ v.doc_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.doc_date %}<p class="error">{{ errors.doc_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.due_date %}has-error{% endif %}">
+          <label for="due_date">Fällig am</label>
+          <input type="text" id="due_date" name="due_date" value="{{ v.due_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.due_date %}<p class="error">{{ errors.due_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if 'account' in unsure %}unsure{% endif %} {{ ampel('account') }} {% if errors.account %}has-error{% endif %}">
+          <label for="account">Konto ({{ chart }})</label>
+          <input type="text" id="account" name="account" value="{{ v.account }}" list="konten" placeholder="z. B. 4930">
+          <datalist id="konten">{% for nr, name in accounts %}<option value="{{ nr }}">{{ nr }} {{ name }}</option>{% endfor %}</datalist>
+          {% if account_label and not errors.account %}<p class="help">{{ account_label }}</p>{% endif %}
+          {% if doc.account_hint and doc.is_draft and not errors.account %}<p class="help ki-hint">{{ doc.account_hint }}</p>{% endif %}
+          {% if errors.account %}<p class="error">{{ errors.account }}</p>{% endif %}
+        </div>
+      </div>
+
+      <h2 class="{% if states.get('lines') %}ampel-title {{ states.get('lines') }}{% elif 'lines' in unsure or 'gross' in unsure %}unsure-title{% endif %}">Beträge
+        <small>je Steuersatz – zwei Werte genügen, der Rest wird berechnet</small></h2>
+      <div class="table-wrap">
+      <table class="table amounts">
+        <thead><tr><th>USt-Satz</th><th class="num">Netto</th><th class="num">USt</th><th class="num">Brutto</th></tr></thead>
+        <tbody>
+        {% for r in rows %}{% set i = loop.index0 %}
+        <tr class="{% if errors['zeile-' ~ i] %}has-error{% endif %}">
+          <td><select name="zeile-{{ i }}-satz" aria-label="Steuersatz Zeile {{ i + 1 }}">
+            {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}
+            {% if r.satz and r.satz not in vat_rates %}<option value="{{ r.satz }}" selected>{{ r.satz }} %</option>{% endif %}
+          </select></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-netto" value="{{ r.netto }}" aria-label="Netto Zeile {{ i + 1 }}"></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-ust" value="{{ r.ust }}" aria-label="USt Zeile {{ i + 1 }}"></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-brutto" value="{{ r.brutto }}" aria-label="Brutto Zeile {{ i + 1 }}"></td>
+        </tr>
+        {% if errors['zeile-' ~ i] %}<tr><td colspan="4"><p class="error">{{ errors['zeile-' ~ i] }}</p></td></tr>{% endif %}
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><th>Summe</th><th class="num">{{ doc.net_total|geld }}</th><th class="num">{{ doc.vat_total|geld }}</th><th class="num">{{ doc.gross_total|geld }}</th></tr></tfoot>
+      </table>
+      </div>
+
+      <div class="grid rc-box">
+        <div class="field {% if 'reverse_charge' in unsure %}unsure{% endif %} {% if errors.reverse_charge %}has-error{% endif %}">
+          <label for="reverse_charge">§ 13b – Ich schulde die Umsatzsteuer (Reverse-Charge)</label>
+          <select id="reverse_charge" name="reverse_charge">
+            <option value="">nein</option>
+            {% for key, label in rc_kinds_in.items() %}<option value="{{ key }}" {% if v.reverse_charge == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          {% if errors.reverse_charge %}<p class="error">{{ errors.reverse_charge }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="reverse_charge_rate">Steuersatz für § 13b</label>
+          <select id="reverse_charge_rate" name="reverse_charge_rate">
+            {% for rate in rc_rates %}<option value="{{ rate }}" {% if v.reverse_charge_rate == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}
+          </select>
+        </div>
+        <p class="help wide">Steht auf der Rechnung „Steuerschuldnerschaft des Leistungsempfängers“ oder „Reverse charge“,
+          weist sie keine Umsatzsteuer aus: Beträge dann mit 0 % eintragen.
+          {% if doc.reverse_charge %}<strong>Sie schulden {{ rc_tax|geld }} Umsatzsteuer</strong> (Voranmeldung
+          Kz {{ '46/47' if doc.reverse_charge == 'eu' else '84/85' }}){% if small_business %} – als Kleinunternehmer
+          <strong>ohne</strong> Vorsteuerabzug.{% else %}; in gleicher Höhe dürfen Sie Vorsteuer abziehen (Kz 67).{% endif %}{% endif %}</p>
+      </div>
+
+      <div class="grid">
+        <div class="field {% if errors.skonto_percent %}has-error{% endif %}">
+          <label for="skonto_percent">Skonto in %</label>
+          <input type="text" id="skonto_percent" name="skonto_percent" class="num" inputmode="decimal" value="{{ v.skonto_percent }}">
+          {% if errors.skonto_percent %}<p class="error">{{ errors.skonto_percent }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.skonto_until %}has-error{% endif %}">
+          <label for="skonto_until">Skonto bis</label>
+          <input type="text" id="skonto_until" name="skonto_until" value="{{ v.skonto_until }}" placeholder="TT.MM.JJJJ">
+          {% if errors.skonto_until %}<p class="error">{{ errors.skonto_until }}</p>{% endif %}
+        </div>
+        <div class="field wide">
+          <label for="notes">Notiz</label>
+          <textarea id="notes" name="notes" rows="2">{{ v.notes }}</textarea>
+        </div>
+      </div>
+      </fieldset>
+      {% if editable %}
+      <div class="actions">
+        <button type="submit" name="aktion" value="speichern" class="btn secondary">Speichern</button>
+        {% if doc.pending %}<button type="submit" name="aktion" value="uebernehmen" class="btn primary">Speichern und übernehmen</button>{% endif %}
+      </div>
+      {% endif %}
+    </form>
+
+    {% if ki_available and editable %}
+    <form method="post" action="/belege/{{ doc.id }}/konto-vorschlagen" class="row">
+      {{ csrf_input }}
+      <button type="submit" class="btn small secondary">Konto per KI vorschlagen</button>
+      <span class="help">Ungespeicherte Eingaben oben vorher speichern.</span>
+    </form>
+    {% endif %}
+
+    {% if editable and not doc.supplier_id and doc.partner_name and can_create_supplier %}
+    <form method="post" action="/belege/{{ doc.id }}/lieferant-anlegen" class="row">
+      {{ csrf_input }}
+      <button type="submit" class="btn small secondary">„{{ doc.partner_name }}“ als neuen Lieferanten anlegen</button>
+    </form>
+    {% endif %}
+
+    {% if not doc.pending %}
+    <section class="card">
+      <h2>Zahlungen</h2>
+      {% if doc.payments %}
+      <table class="table">
+        <thead><tr><th>Datum</th><th class="num">Betrag</th><th class="num">Skonto</th><th>Notiz</th><th></th></tr></thead>
+        <tbody>
+        {% for p in doc.payments %}
+        <tr>
+          <td>{{ p.paid_on|datum }}</td><td class="num">{{ p.amount|geld }}</td>
+          <td class="num">{% if p.skonto > 0 %}{{ p.skonto|geld }}{% endif %}</td><td class="help">{{ p.note or '' }}</td>
+          <td>{% if can_edit and can_finalize %}
+            <form method="post" action="{{ area }}/{{ doc.id }}/zahlung/{{ p.id }}/loeschen">{{ csrf_input }}
+              <button type="submit" class="btn small danger">Entfernen</button></form>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <p>Offen: <strong>{{ doc.open_amount|geld }}</strong></p>
+      {% if can_edit and doc.status == 'offen' and doc.gross_total %}
+      {% set via = ' form="beleg-form"' if editable else '' %}
+      {% if editable %}<div class="grid">{% else %}
+      <form method="post" action="{{ area }}/{{ doc.id }}/zahlung" class="grid" novalidate>
+        {{ csrf_input }}{% endif %}
+        {% if payment_errors._ %}<div class="notice fehler wide">{{ payment_errors._ }}</div>{% endif %}
+        <div class="field {% if payment_errors.paid_on %}has-error{% endif %}">
+          <label for="paid_on">Bezahlt am</label>
+          <input type="text" id="paid_on" name="paid_on" value="{{ today }}"{{ via|safe }}>
+          {% if payment_errors.paid_on %}<p class="error">{{ payment_errors.paid_on }}</p>{% endif %}
+        </div>
+        <div class="field {% if payment_errors.amount %}has-error{% endif %}">
+          <label for="amount">Betrag (leer = offener Betrag)</label>
+          <input type="text" id="amount" name="amount" class="num" inputmode="decimal"{{ via|safe }}>
+          {% if payment_errors.amount %}<p class="error">{{ payment_errors.amount }}</p>{% endif %}
+        </div>
+        {% if skonto_offer %}
+        <div class="field check wide">
+          <label><input type="checkbox" name="mit_skonto" value="1"{{ via|safe }}>
+            mit {{ doc.skonto_percent|prozent }} Skonto bezahlt (Abzug {{ skonto_offer|geld }}{% if doc.skonto_until %}, Frist bis {{ doc.skonto_until|datum }}{% endif %})</label>
+        </div>
+        {% endif %}
+        <div class="field wide"><label for="note">Notiz zur Zahlung</label><input type="text" id="note" name="note"{{ via|safe }}></div>
+        <div class="actions wide">
+          {% if doc.is_draft %}<span class="help">Mit der ersten Zahlung werden die Angaben oben gespeichert und der Beleg festgeschrieben.</span>{% endif %}
+          <button type="submit" class="btn primary"{% if editable %} form="beleg-form" formaction="{{ area }}/{{ doc.id }}/zahlung"{% endif %}>Zahlung erfassen</button>
+        </div>
+      {% if editable %}</div>{% else %}</form>{% endif %}
+      {% endif %}
+    </section>
+
+    {% if can_edit %}
+    <section class="card">
+      <h2>Beleg</h2>
+      {% if doc.is_draft %}
+        {% if can_finalize %}
+        <div class="row">
+          <button type="submit" class="btn secondary" form="beleg-form" formaction="{{ area }}/{{ doc.id }}/festschreiben">Festschreiben</button>
+          <span class="help">{% if missing_final %}Noch nötig (gespeicherter Stand): {{ missing_final|join(', ') }} – Eingaben oben
+            werden beim Festschreiben mitgespeichert.{% else %}Speichert die Angaben oben; danach ist der Beleg nicht mehr änderbar (GoBD).{% endif %}</span>
+        </div>
+        {% endif %}
+        <form method="post" action="{{ area }}/{{ doc.id }}/loeschen" class="row">
+          {{ csrf_input }}
+          <button type="submit" class="btn small danger">Entwurf löschen</button>
+        </form>
+      {% elif doc.status != 'storniert' and can_finalize %}
+        <form method="post" action="{{ area }}/{{ doc.id }}/stornieren" class="row">
+          {{ csrf_input }}
+          <input type="text" name="grund" placeholder="Grund der Stornierung" required class="grow">
+          <button type="submit" class="btn small danger">Stornieren</button>
+        </form>
+      {% else %}
+        <p class="help">Festgeschrieben am {{ doc.finalized_at|datumzeit }} – nicht mehr änderbar.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    {% else %}
+      {% if can_edit %}
+      <form method="post" action="{{ area }}/{{ doc.id }}/verwerfen" class="row">
+        {{ csrf_input }}
+        <button type="submit" class="btn small danger">Beleg verwerfen (löschen)</button>
+      </form>
+      {% endif %}
+    {% endif %}
+
+    <details class="card history">
+      <summary>Verlauf ({{ history|length }})</summary>
+      <ul>
+        {% for e, name in history %}<li>{{ e.created_at|datumzeit }} – {{ name }}: {{ e.action }}</li>{% endfor %}
+      </ul>
+    </details>
+  </div>
+</div>
+{% endblock %}

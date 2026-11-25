@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Rechte – {{ m.user.name }}{% endblock %}
+{% block content %}
+<p><a href="/benutzer">← Zurück zur Benutzerliste</a></p>
+<h1>{{ m.user.name }} <small>{{ m.user.email }}</small></h1>
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+<form method="post" action="/benutzer/{{ m.id }}" class="card">
+  {{ csrf_input }}
+  <div class="grid">
+    <div class="field">
+      <label for="role">Rolle</label>
+      <select id="role" name="role">
+        {% for key, label in roles %}<option value="{{ key }}" {% if key == m.role %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <p class="help">Inhaber haben immer alle Rechte.</p>
+    </div>
+    <div class="field check">
+      <label><input type="checkbox" name="is_active" value="1" {% if m.is_active %}checked{% endif %}> Zugang aktiv</label>
+      <p class="help">Ohne Haken kann sich die Person nicht mehr in dieser Firma anmelden.</p>
+    </div>
+  </div>
+
+  <h2>Rechte je Bereich</h2>
+  <div class="table-wrap">
+  <table class="table perms">
+    <thead><tr><th>Bereich</th>{% for level in levels %}<th>{{ level_labels[level] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for key, label in modules %}
+    {% set current = m.permissions.get(key, 'keine') %}
+    <tr>
+      <td>{{ label }}</td>
+      {% for level in levels %}
+      <td class="center"><input type="radio" name="perm_{{ key }}" value="{{ level }}" aria-label="{{ label }}: {{ level_labels[level] }}"
+          {% if current == level %}checked{% endif %}></td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Sonderrechte</h2>
+  {% for key, label in extra_rights %}
+  <div class="field check"><label><input type="checkbox" name="extra" value="{{ key }}" {% if key in m.extra_rights %}checked{% endif %}> {{ label }}</label></div>
+  {% endfor %}
+
+  <div class="actions">
+    <button type="submit" name="aktion" value="vorlage" class="btn secondary">Rechte aus gewählter Rolle übernehmen</button>
+    <button type="submit" name="aktion" value="speichern" class="btn primary">Speichern</button>
+  </div>
+</form>
+{% endblock %}

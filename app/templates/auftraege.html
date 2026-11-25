@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Aufträge{% endblock %}
+{% macro status_badge(o) -%}
+<span class="badge {{ {'offen': 'warn', 'arbeit': 'info', 'erledigt': 'ok'}.get(o.status, '') }}">{{ o.status_label }}</span>
+{%- endmacro %}
+{% macro doc_status(d) -%}
+{% if d.is_draft %}<span class="badge">Entwurf</span>{% else %}<span class="badge {{ {'bezahlt': 'ok', 'offen': 'warn', 'storniert': 'danger'}.get(d.status, '') }}">{{ d.status_label }}</span>{% endif %}
+{%- endmacro %}
+{% block content %}
+<h1>Aufträge <small>Projektübersicht je Objekt</small></h1>
+{% if synced.orders or synced.linked %}
+<div class="notice ok" role="status">Automatisch übernommen: {{ synced.orders }} {{ 'Auftrag' if synced.orders == 1 else 'Aufträge' }} aus bisherigen Rechnungen, Angeboten und Verträgen{% if synced.linked %}, {{ synced.linked }} Rechnung(en) einem vorhandenen Auftrag zugeordnet{% endif %}.
+  {% if synced.customers %}Dabei {{ 'wurde' if synced.customers == 1 else 'wurden' }} {{ synced.customers }} {{ 'Kunde' if synced.customers == 1 else 'Kunden' }} aus Name und Adresse der Rechnungen angelegt – bitte unter Stammdaten → Kunden prüfen.{% endif %}</div>
+{% endif %}
+
+{# Reiter nach Stand + Suche (Navigationsleiste aus der Skizze) #}
+<nav class="order-tabs" aria-label="Aufträge nach Stand">
+  {% for key, label in tabs.items() %}
+  {% set p = dict(params, status=key) %}{% if not key %}{% set _ = p.pop('status') %}{% endif %}
+  <a href="/auftraege{% if p %}?{{ p|urlencode }}{% endif %}" class="order-tab {% if status == key %}on{% endif %}" {% if status == key %}aria-current="page"{% endif %}>{{ label }} <span class="count">{{ counts.get(key, 0) }}</span></a>
+  {% endfor %}
+</nav>
+<form method="get" action="/auftraege" class="searchbar order-filter">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <label class="sr-only" for="q">Suchen</label>
+  <input type="search" id="q" name="q" value="{{ q }}" placeholder="Objekt, Kunde, Auftragsnummer …">
+  <label class="sr-only" for="sort">Sortieren</label>
+  <select id="sort" name="sort" class="compact">
+    {% for key, label in sorts.items() %}{% if key != 'preis' or show_prices %}<option value="{{ key }}" {% if sort == key %}selected{% endif %}>Sortieren: {{ label }}</option>{% endif %}{% endfor %}
+  </select>
+  <label class="sr-only" for="art">Art</label>
+  <select id="art" name="art" class="compact">
+    <option value="">alle Arten</option>
+    {% for key, label in kinds.items() %}<option value="{{ key }}" {% if art == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn secondary">Filtern</button>
+  {% if q or art %}<a class="btn link" href="/auftraege{% if status %}?status={{ status }}{% endif %}">zurücksetzen</a>{% endif %}
+</form>
+
+{% if can_edit %}
+<details class="add-box" {% if not cards and not q and not status and not art %}open{% endif %}>
+  <summary class="btn primary">Neuer Auftrag</summary>
+  <form method="post" action="/auftraege/neu" class="card searchbar">
+    {{ csrf_input }}
+    <label for="customer_id">Kunde</label>
+    <select id="customer_id" name="customer_id" required>
+      <option value="">– bitte wählen –</option>
+      {% for c in customers %}<option value="{{ c.id }}">{{ c.name }} ({{ c.number }})</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn primary">Anlegen</button>
+    <p class="help wide">Tipp: Aus einem angenommenen Angebot entsteht der Auftrag mit einem Klick (Knopf „Auftrag anlegen“ im Angebot) – Kunde, Objekt und Preise werden übernommen.</p>
+  </form>
+</details>
+{% endif %}
+
+{% if cards %}
+<div class="order-grid">
+{% for c in cards %}
+<details class="card obj" id="objekt-{{ c.key }}" {% if offen == c.key or cards|length == 1 %}open{% endif %}>
+  <summary>
+    <span class="obj-head">
+      <span><strong class="obj-title">{{ c.title }}</strong><br>
+        <span class="muted">{{ c.customer.name }}{% if c.address %} · {{ c.address|join(', ') }}{% endif %}</span></span>
+      <span class="obj-arrow" aria-hidden="true">▾</span>
+    </span>
+    <span class="obj-orders">
+      {% for o in c.orders %}<span class="obj-line"><span>{{ o.number }} · {{ o.title }}</span>{{ status_badge(o) }}</span>{% endfor %}
+    </span>
+    <span class="obj-foot">
+      <span class="muted">erstellt {{ c.latest|datum }}{% if c.all_count > c.orders|length %} · {{ c.all_count - c.orders|length }} weitere ausgeblendet{% endif %}</span>
+      {% if show_prices %}<strong>{{ c.total|geld }} <small class="muted">netto</small></strong>{% endif %}
+    </span>
+  </summary>
+
+  <div class="obj-body grid two">
+    <div>
+      <h3>Kunde und Adresse</h3>
+      <p>{% if ctx.can('kunden') %}<a href="/kunden/{{ c.customer.id }}">{{ c.customer.name }}</a>{% else %}{{ c.customer.name }}{% endif %}
+        {% if c.customer.contact_person %}<br><span class="muted">{{ c.customer.contact_person }}</span>{% endif %}
+        <br>{{ c.title }}{% for line in c.address %}<br>{{ line }}{% endfor %}
+        {% if c.customer.email %}<br><a href="mailto:{{ c.customer.email }}">{{ c.customer.email }}</a>{% endif %}
+        {% if c.customer.phone %}<br>{{ c.customer.phone }}{% endif %}</p>
+
+      <h3>Zugehörige Belege</h3>
+      {% set ns = namespace(any=false) %}
+      <ul class="plain">
+      {% for o in c.orders %}
+        {% if o.quote %}{% set ns.any = true %}<li>Angebot {% if can_quotes %}<a href="/angebote/{{ o.quote.id }}">{{ o.quote.number }}</a>{% else %}{{ o.quote.number }}{% endif %} <span class="muted">({{ o.quote.status_label }})</span></li>{% endif %}
+        {% if o.contract %}{% set ns.any = true %}<li>Vertrag {% if can_invoices %}<a href="/vertraege/{{ o.contract.id }}">{{ o.contract.title }}</a>{% else %}{{ o.contract.title }}{% endif %} <span class="muted">({{ o.contract.status_label }})</span></li>{% endif %}
+        {% for d in docs[o.id] %}{% set ns.any = true %}<li>{{ 'Stornorechnung' if d.kind == 'storno' else 'Rechnung' }} {% if can_invoices %}<a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a>{% else %}{{ d.number or 'Entwurf' }}{% endif %}
+          {% if show_prices %}<span class="muted">{{ d.gross_total|geld }}</span>{% endif %} {{ doc_status(d) }}</li>{% endfor %}
+      {% endfor %}
+      </ul>
+      {% if not ns.any %}<p class="help">Noch keine Belege.</p>{% endif %}
+    </div>
+
+    <div>
+      <h3>Aufträge{% if show_prices %}, Leistungen und Preise{% endif %}</h3>
+      {% for o in c.orders %}
+      <div class="obj-order">
+        <div class="obj-line"><span><a href="/auftraege/{{ o.id }}"><strong>{{ o.number }}</strong> · {{ o.title }}</a> <span class="muted">({{ o.kind_label }})</span></span>{{ status_badge(o) }}</div>
+        {% if o.description %}<p class="help prewrap">{{ o.description }}</p>{% endif %}
+        {% if o.id in suggest and can_edit %}
+        <form method="post" action="/auftraege/{{ o.id }}/stand" class="notice hinweis inline-notice">{{ csrf_input }}
+          <input type="hidden" name="status" value="erledigt"><input type="hidden" name="zurueck" value="{{ here }}">
+          Alle Rechnungen sind bezahlt. <button type="submit" class="btn small secondary">Als erledigt markieren</button></form>
+        {% endif %}
+        {% if show_prices and o.lines %}
+        <table class="table compact">
+          {% for line in o.lines %}<tr><td>{{ line.quantity|zahl }} {{ line.unit or '' }} × {{ line.title }}</td><td class="num">{{ line.net|geld }}</td></tr>{% endfor %}
+          <tr class="sum"><td>Summe netto{% if o.kind == 'dauer' %} je Monat{% endif %}</td><td class="num">{{ o.net_total|geld }}</td></tr>
+        </table>
+        {% endif %}
+        {% if o.notes %}<p class="prewrap obj-note">{{ o.notes }}</p>{% endif %}
+        {% if o.tasks %}
+        <ul class="plain tasks">
+          {% for t in o.tasks %}<li>
+            {% if can_edit %}<form method="post" action="/auftraege/aufgabe/{{ t.id }}" class="task-form">{{ csrf_input }}<input type="hidden" name="zurueck" value="{{ here }}">
+              <button type="submit" class="paid-box {% if t.done %}on{% endif %}" aria-label="{{ t.text }}: {{ 'erledigt – Haken entfernen' if t.done else 'abhaken' }}">{% if t.done %}✓{% endif %}</button></form>
+            {% else %}<span class="paid-box {% if t.done %}on{% endif %}" role="img" aria-label="{{ 'erledigt' if t.done else 'offen' }}">{% if t.done %}✓{% endif %}</span>{% endif %}
+            <span class="{% if t.done %}done{% endif %}">{{ t.text }}</span></li>{% endfor %}
+        </ul>
+        {% endif %}
+        <div class="obj-actions">
+          {% if can_edit %}
+          <form method="post" action="/auftraege/{{ o.id }}/stand" class="inline-form">{{ csrf_input }}<input type="hidden" name="zurueck" value="{{ here }}">
+            <label class="sr-only" for="stand-{{ o.id }}">Stand von {{ o.number }}</label>
+            <select id="stand-{{ o.id }}" name="status" class="compact">{% for key, label in statuses.items() %}<option value="{{ key }}" {% if o.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+            <button type="submit" class="btn small secondary">Stand ändern</button></form>
+          <a class="btn small secondary" href="/auftraege/{{ o.id }}">Bearbeiten</a>
+          {% endif %}
+          {% if can_edit and can_invoice and show_prices and o.lines %}
+          <form method="post" action="/auftraege/{{ o.id }}/rechnung" class="inline-form">{{ csrf_input }}<button type="submit" class="btn small secondary">Rechnung erstellen</button></form>
+          {% if o.kind == 'dauer' and contracts_on and not o.contract_id %}
+          <form method="post" action="/auftraege/{{ o.id }}/vertrag" class="inline-form">{{ csrf_input }}<button type="submit" class="btn small secondary">Vertrag anlegen</button></form>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endfor %}
+</div>
+{% else %}
+<section class="card"><p>{% if q or status or art %}Keine Aufträge für diese Auswahl.{% else %}Noch keine Aufträge – legen Sie den ersten an oder übernehmen Sie ein angenommenes Angebot.{% endif %}</p></section>
+{% endif %}
+{% endblock %}

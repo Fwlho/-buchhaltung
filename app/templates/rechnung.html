@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Rechnung ' ~ doc.number if doc.number else 'Rechnungsentwurf' }}{% endblock %}
+{% block mainclass %}page wide{% endblock %}
+{% block content %}
+{% set editable = can_edit and doc.is_draft %}
+<p><a href="/rechnungen">← Rechnungen</a>{% if doc.customer %} · <a href="/kunden/{{ doc.customer_id }}">Kunde {{ doc.customer.number }}</a>{% endif %}</p>
+<h1>{{ 'Stornorechnung' if doc.kind == 'storno' else 'Rechnung' }} {{ doc.number or '(Entwurf)' }} <small>{{ doc.recipient_name }}</small>
+  {% if doc.is_draft %}<span class="badge">Entwurf</span>
+  {% else %}<span class="badge {{ {'bezahlt': 'ok', 'storniert': 'danger'}.get(doc.status, '') }}">{{ doc.status_label }}</span>{% endif %}
+</h1>
+{% if errors._ %}<div class="notice fehler">{{ errors._ }}</div>{% endif %}
+{% if payment_errors._ and doc.is_draft %}<div class="notice fehler">{{ payment_errors._ }}</div>{% endif %}
+{% if doc.status == 'storniert' %}<div class="notice fehler">Storniert: {{ doc.cancel_reason }}{% if storno %} – <a href="/rechnungen/{{ storno.id }}">Stornorechnung {{ storno.number }}</a>{% endif %}</div>{% endif %}
+{% if doc.kind == 'storno' and doc.storno_of %}<div class="notice hinweis">Stornorechnung zur <a href="/rechnungen/{{ doc.storno_of_id }}">Rechnung {{ doc.storno_of.number }}</a>.</div>{% endif %}
+
+{% if editable %}
+{# ============================================================ Entwurf bearbeiten #}
+<form method="post" action="/rechnungen/{{ doc.id }}" novalidate>
+  {{ csrf_input }}
+  {% if errors and not errors._ %}<div class="notice fehler">Bitte die markierten Angaben prüfen.</div>{% endif %}
+  <div class="split">
+    <section class="card">
+      <h2>Empfänger</h2>
+      <div class="field {% if errors.recipient_name %}has-error{% endif %}">
+        <label for="recipient_name">Name / Firma</label>
+        <input type="text" id="recipient_name" name="recipient_name" value="{{ v.recipient_name }}">
+        {% if errors.recipient_name %}<p class="error">{{ errors.recipient_name }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="recipient_address">Anschrift</label>
+        <textarea id="recipient_address" name="recipient_address" rows="4">{{ v.recipient_address }}</textarea>
+      </div>
+      <div class="field {% if errors.object_address %}has-error{% endif %}">
+        <label for="object_address">Leistungsort / Objekt (optional)</label>
+        {% if addresses %}
+        <select name="object_address_id" aria-label="Objektadresse übernehmen" class="mb">
+          <option value="">– Objektadresse des Kunden übernehmen … –</option>
+          {% for a in addresses %}<option value="{{ a.id }}">{{ a.label }} – {{ a.street }}, {{ a.city }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <textarea id="object_address" name="object_address" rows="2">{{ v.object_address }}</textarea>
+        {% if errors.object_address %}<p class="error">{{ errors.object_address }}</p>{% endif %}
+      </div>
+    </section>
+    <section class="card">
+      <h2>Daten</h2>
+      <div class="grid">
+        <div class="field {% if errors.doc_date %}has-error{% endif %}">
+          <label for="doc_date">Rechnungsdatum</label>
+          <input type="text" id="doc_date" name="doc_date" value="{{ v.doc_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.doc_date %}<p class="error">{{ errors.doc_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.payment_terms_days %}has-error{% endif %}">
+          <label for="payment_terms_days">Zahlungsziel (Tage)</label>
+          <input type="text" id="payment_terms_days" name="payment_terms_days" class="num" inputmode="numeric" value="{{ v.payment_terms_days }}">
+          {% if errors.payment_terms_days %}<p class="error">{{ errors.payment_terms_days }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.service_date %}has-error{% endif %}">
+          <label for="service_date">Leistungsdatum bzw. Beginn</label>
+          <input type="text" id="service_date" name="service_date" value="{{ v.service_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.service_date %}<p class="error">{{ errors.service_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.service_until %}has-error{% endif %}">
+          <label for="service_until">Leistungszeitraum bis (optional)</label>
+          <input type="text" id="service_until" name="service_until" value="{{ v.service_until }}" placeholder="TT.MM.JJJJ">
+          {% if errors.service_until %}<p class="error">{{ errors.service_until }}</p>{% endif %}
+        </div>
+        <div class="field">
+          <label for="payment_qr">QR-Code zum Bezahlen</label>
+          <select id="payment_qr" name="payment_qr">
+            <option value="girocode" {% if v.payment_qr == 'girocode' %}selected{% endif %}>GiroCode</option>
+            <option value="keiner" {% if v.payment_qr == 'keiner' %}selected{% endif %}>keiner</option>
+          </select>
+        </div>
+      </div>
+      <h3>Hinweise auf der Rechnung</h3>
+      {% if small_business %}<p class="help">Kleinunternehmer: Der Hinweis nach § 19 UStG wird automatisch gedruckt, alle Positionen haben 0 %.</p>{% endif %}
+      {% for key, (label, _) in hints.items() %}
+      <div class="field check"><label><input type="checkbox" name="hint" value="{{ key }}" {% if key in v.hints %}checked{% endif %}> {{ label }}</label></div>
+      {% endfor %}
+      {% if '13b' in (doc.hints or []) and doc.reverse_charge %}
+      <p class="help">§ 13b: {{ rc_kinds_out.get(doc.reverse_charge, 'Kunde außerhalb der EU – § 13b nicht möglich') }}
+        (ergibt sich aus Land bzw. USt-IdNr. des Kunden).</p>
+      {% endif %}
+      <div class="field {% if errors.labor_amount %}has-error{% endif %}">
+        <label for="labor_amount">Lohnanteil brutto für § 35a (falls gewählt)</label>
+        <input type="text" id="labor_amount" name="labor_amount" class="num" inputmode="decimal" value="{{ v.labor_amount }}">
+        {% if errors.labor_amount %}<p class="error">{{ errors.labor_amount }}</p>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="field wide">
+      <label for="intro_text">Einleitungstext</label>
+      <textarea id="intro_text" name="intro_text" rows="2">{{ v.intro_text }}</textarea>
+    </div>
+    <h2>Positionen <small>Leere Zeilen werden ignoriert. Aus dem Katalog übernehmen: Eintrag wählen und Bezeichnung leer lassen.</small></h2>
+    <div class="table-wrap">
+    <table class="table positions">
+      <thead><tr><th>#</th><th>Bezeichnung / Beschreibung</th><th class="num">Menge</th><th>Einheit</th>
+        <th class="num">Einzelpreis €</th><th class="num">Rabatt %</th><th>USt</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set i = loop.index0 %}
+      <tr class="{% if errors['pos-' ~ i] %}has-error{% endif %}">
+        <td class="help">{{ i + 1 }}</td>
+        <td class="desc">
+          <input type="text" name="pos-{{ i }}-titel" value="{{ r.titel }}" placeholder="Bezeichnung (fett)" aria-label="Bezeichnung Position {{ i + 1 }}">
+          <textarea name="pos-{{ i }}-beschreibung" rows="1" placeholder="Beschreibung (optional)" aria-label="Beschreibung Position {{ i + 1 }}">{{ r.beschreibung }}</textarea>
+          {% if not r.titel and catalog %}
+          <select name="pos-{{ i }}-katalog" aria-label="Aus Katalog übernehmen, Position {{ i + 1 }}">
+            <option value="">– aus Katalog –</option>
+            {% for c in catalog %}<option value="{{ c.id }}" {% if r.katalog == c.id|string %}selected{% endif %}>{{ c.title }} ({{ c.price_net|preis }} €/{{ c.unit }})</option>{% endfor %}
+          </select>
+          {% endif %}
+          {% if errors['pos-' ~ i] %}<p class="error">{{ errors['pos-' ~ i] }}</p>{% endif %}
+        </td>
+        <td><input type="text" class="num" inputmode="decimal" name="pos-{{ i }}-menge" value="{{ r.menge }}" aria-label="Menge Position {{ i + 1 }}"></td>
+        <td><select name="pos-{{ i }}-einheit" aria-label="Einheit Position {{ i + 1 }}">
+          {% for u in units %}<option value="{{ u }}" {% if r.einheit == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td>
+        <td><input type="text" class="num" inputmode="decimal" name="pos-{{ i }}-preis" value="{{ r.preis }}" aria-label="Einzelpreis Position {{ i + 1 }}"></td>
+        <td><input type="text" class="num" inputmode="decimal" name="pos-{{ i }}-rabatt" value="{{ r.rabatt }}" aria-label="Rabatt Position {{ i + 1 }}"></td>
+        <td><select name="pos-{{ i }}-satz" aria-label="Steuersatz Position {{ i + 1 }}" {% if small_business %}disabled{% endif %}>
+          <option value="">Standard</option>
+          {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}</select></td>
+        <td>{% if r.titel %}<label class="inline-check" title="Position entfernen"><input type="checkbox" name="pos-{{ i }}-entfernen" value="1"> entf.</label>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="row"><button type="submit" name="aktion" value="mehr_zeilen" class="btn small secondary">Speichern und weitere Zeilen</button></div>
+    {% if doc.lines %}
+    <table class="table totals">
+      <tr><td>Summe netto</td><td class="num">{{ doc.net_total|geld }}</td></tr>
+      {% for g in groups %}<tr><td>zzgl. {{ g.rate|prozent }} USt auf {{ g.net|geld }}</td><td class="num">{{ g.vat|geld }}</td></tr>{% endfor %}
+      <tr class="grand"><td>Gesamtbetrag</td><td class="num">{{ doc.gross_total|geld }}</td></tr>
+    </table>
+    <p class="help">Stand der letzten Speicherung.</p>
+    {% endif %}
+    <div class="field wide">
+      <label for="closing_text">Schlusstext</label>
+      <textarea id="closing_text" name="closing_text" rows="2">{{ v.closing_text }}</textarea>
+    </div>
+    <div class="field wide">
+      <label for="notes">Interne Notiz (erscheint nicht auf der Rechnung)</label>
+      <textarea id="notes" name="notes" rows="2">{{ v.notes }}</textarea>
+    </div>
+  </section>
+
+  <div class="actions sticky-actions">
+    <button type="submit" name="aktion" value="vorschau" formtarget="_blank" class="btn secondary">Speichern und PDF-Vorschau</button>
+    <button type="submit" name="aktion" value="speichern" class="btn primary">Speichern</button>
+  </div>
+</form>
+
+<section class="card">
+  <h2>Festschreiben</h2>
+  {% if missing %}
+    <p class="notice hinweis">Für eine gültige Rechnung (§ 14 UStG) fehlt noch: {{ missing|join(', ') }}.</p>
+  {% else %}
+    <p class="help">Beim Festschreiben wird die nächste Rechnungsnummer vergeben und das PDF unveränderbar gespeichert.
+      Danach sind Änderungen nur noch per Stornorechnung möglich. Bitte vorher speichern und die Vorschau prüfen.</p>
+  {% endif %}
+  <div class="row">
+    {% if can_finalize %}
+    <form method="post" action="/rechnungen/{{ doc.id }}/festschreiben">
+      {{ csrf_input }}<button type="submit" class="btn primary" {% if missing %}disabled{% endif %}>Festschreiben und Nummer vergeben</button>
+    </form>
+    {% else %}<span class="help">Festschreiben darf nur, wer das Sonderrecht „Festschreiben“ hat.</span>{% endif %}
+    <form method="post" action="/rechnungen/{{ doc.id }}/loeschen">
+      {{ csrf_input }}<button type="submit" class="btn small danger">Entwurf löschen</button>
+    </form>
+  </div>
+</section>
+
+{% else %}
+{# ===================================================== Festgeschrieben / nur lesen #}
+<div class="split">
+  <section class="card preview">
+    {% if doc.file %}
+      <iframe src="/rechnungen/{{ doc.id }}/pdf" title="Rechnung als PDF"></iframe>
+      <p class="help"><a href="/rechnungen/{{ doc.id }}/pdf" target="_blank" rel="noopener">PDF in neuem Fenster öffnen</a>
+        · SHA-256 {{ doc.file.sha256[:16] }}…</p>
+      {% if doc.source == 'import' %}<p class="help"><span class="badge">importiert</span> Hochgeladene alte Rechnung –
+        das Original-PDF wurde unverändert übernommen; die Positionen sind je Steuersatz zusammengefasst.</p>{% endif %}
+      {% if doc.e_invoice_format == 'zugferd' %}<p class="help"><span class="badge ok">E-Rechnung</span> ZUGFeRD – die Rechnungsdaten sind im PDF eingebettet.</p>
+      {% elif doc.e_invoice_format == 'xrechnung' %}<p class="help"><span class="badge ok">E-Rechnung</span> XRechnung –
+        <a href="/rechnungen/{{ doc.id }}/xml">XML-Datei herunterladen</a> (die eigentliche Rechnung; das PDF ist die Ansicht).</p>{% endif %}
+    {% else %}
+      <iframe src="/rechnungen/{{ doc.id }}/vorschau" title="Vorschau"></iframe>
+    {% endif %}
+  </section>
+  <div>
+    <section class="card">
+      <h2>Übersicht</h2>
+      <table class="table compact">
+        <tr><td>Rechnungsdatum</td><td>{{ doc.doc_date|datum }}</td></tr>
+        <tr><td>Leistung</td><td>{{ doc.service_date|datum }}{% if doc.service_until %} – {{ doc.service_until|datum }}{% endif %}</td></tr>
+        {% if doc.is_final and doc.kind == 'rechnung' %}<tr><td>Fällig am</td><td>{{ doc.due_date|datum }}</td></tr>{% endif %}
+        <tr><td>Netto</td><td>{{ doc.net_total|geld }}</td></tr>
+        <tr><td>Brutto</td><td><strong>{{ doc.gross_total|geld }}</strong></td></tr>
+        {% if doc.is_final %}<tr><td>Festgeschrieben</td><td>{{ doc.finalized_at|datumzeit }}</td></tr>{% endif %}
+        {% for d in dunnings %}<tr><td>{{ d.level_name }}</td><td>{% if ctx.can('mahnwesen') %}<a href="/mahnwesen/{{ d.id }}">{{ d.number }}</a>{% else %}{{ d.number }}{% endif %} vom {{ d.dunning_date|datum }}, Frist {{ d.pay_until|datum }}</td></tr>{% endfor %}
+      </table>
+    </section>
+
+    {% if doc.is_final and doc.kind == 'rechnung' %}
+    <section class="card">
+      <h2>Zahlungseingänge</h2>
+      {% if doc.payments %}
+      <table class="table">
+        <thead><tr><th>Datum</th><th class="num">Betrag</th><th>Notiz</th><th></th></tr></thead>
+        <tbody>
+        {% for p in doc.payments %}
+        <tr><td>{{ p.paid_on|datum }}</td><td class="num">{{ p.amount|geld }}</td><td class="help">{{ p.note or '' }}</td>
+          <td>{% if can_edit and can_finalize %}<form method="post" action="/rechnungen/{{ doc.id }}/zahlung/{{ p.id }}/loeschen">{{ csrf_input }}
+            <button type="submit" class="btn small danger">Entfernen</button></form>{% endif %}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <div class="row paid-row">
+        <span>Offen: <strong>{{ doc.open_amount|geld }}</strong></span>
+        {% if doc.status == 'offen' and can_edit %}
+        <form method="post" action="/rechnungen/{{ doc.id }}/bezahlt" class="row inline">
+          {{ csrf_input }}
+          <button type="submit" class="paid-box" title="Als bezahlt markieren" aria-label="Als bezahlt markieren"></button>
+          <span>Bezahlt am</span>
+          <input type="text" name="paid_on" value="{{ today }}" class="date-mini" aria-label="Bezahlt am" placeholder="TT.MM.JJJJ">
+        </form>
+        {% elif doc.status == 'bezahlt' %}
+        <span class="row inline">
+          {% if can_edit and can_finalize %}
+          <form method="post" action="/rechnungen/{{ doc.id }}/unbezahlt">{{ csrf_input }}
+            <button type="submit" class="paid-box on" title="Häkchen entfernen (Zahlung wird wieder gelöscht)" aria-label="Häkchen entfernen">✓</button></form>
+          {% else %}<span class="paid-box on" role="img" aria-label="bezahlt">✓</span>{% endif %}
+          <span>Bezahlt</span>
+        </span>
+        {% endif %}
+      </div>
+      <p class="help">Häkchen setzen bucht den offenen Betrag zum angegebenen Tag (zählt so in der EÜR). Teilzahlungen unten erfassen.</p>
+      {% if can_edit and doc.status == 'offen' %}
+      <form method="post" action="/rechnungen/{{ doc.id }}/zahlung" class="grid" novalidate>
+        {{ csrf_input }}
+        {% if payment_errors._ %}<div class="notice fehler wide">{{ payment_errors._ }}</div>{% endif %}
+        <div class="field {% if payment_errors.paid_on %}has-error{% endif %}">
+          <label for="paid_on">Eingegangen am</label>
+          <input type="text" id="paid_on" name="paid_on" value="{{ today }}">
+          {% if payment_errors.paid_on %}<p class="error">{{ payment_errors.paid_on }}</p>{% endif %}
+        </div>
+        <div class="field {% if payment_errors.amount %}has-error{% endif %}">
+          <label for="amount">Betrag (leer = offener Betrag)</label>
+          <input type="text" id="amount" name="amount" class="num" inputmode="decimal">
+          {% if payment_errors.amount %}<p class="error">{{ payment_errors.amount }}</p>{% endif %}
+        </div>
+        <div class="field wide"><label for="note">Notiz</label><input type="text" id="note" name="note"></div>
+        <div class="actions wide"><button type="submit" class="btn primary">Zahlungseingang erfassen</button></div>
+      </form>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if mail and can_edit %}{% include "_email_entwurf.html" %}{% endif %}
+
+    {% if can_edit %}
+    <section class="card">
+      <h2>Aktionen</h2>
+      <div class="row">
+        {% if doc.kind == 'rechnung' %}
+        <form method="post" action="/rechnungen/{{ doc.id }}/duplizieren">{{ csrf_input }}
+          <button type="submit" class="btn secondary">Als neue Rechnung kopieren</button></form>
+        {% endif %}
+      </div>
+      {% if doc.is_final and doc.kind == 'rechnung' and doc.status != 'storniert' and can_finalize %}
+      <form method="post" action="/rechnungen/{{ doc.id }}/stornieren" class="row">
+        {{ csrf_input }}
+        <input type="text" name="grund" placeholder="Grund der Stornierung" required class="grow">
+        <button type="submit" class="btn danger">Stornorechnung erstellen</button>
+      </form>
+      <p class="help">Für Korrekturen: stornieren und danach die Kopie anpassen.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<details class="card history">
+  <summary>Verlauf ({{ history|length }})</summary>
+  <ul>{% for e, name in history %}<li>{{ e.created_at|datumzeit }} – {{ name }}: {{ e.action }}{% if e.changes and e.changes.nummer %} ({{ e.changes.nummer }}){% endif %}</li>{% endfor %}</ul>
+</details>
+{% endblock %}

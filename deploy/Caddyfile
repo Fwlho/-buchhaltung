@@ -1,0 +1,32 @@
+# Caddy holt und erneuert das HTTPS-Zertifikat (Let's Encrypt) automatisch.
+# Voraussetzung: Die Domain zeigt per DNS auf diesen Server, Ports 80 und 443 sind offen.
+# Unverschlüsselte Aufrufe (http://) leitet Caddy automatisch auf https:// um.
+{
+	# HTTP/1.1, HTTP/2 und HTTP/3 (alle nur verschlüsselt)
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 30MB
+	}
+	header {
+		# Nur noch HTTPS – auch für Unterseiten, ein Jahr lang
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		# Kamera, Mikrofon, Standort usw. braucht das Programm nicht
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		-Server
+		-Via
+	}
+	reverse_proxy app:8000 {
+		# Das Programm sieht die echte Besucher-IP (für die Fehlversuch-Sperre)
+		header_up X-Forwarded-For {remote_host}
+	}
+}

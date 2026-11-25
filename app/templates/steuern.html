@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Steuern {{ year }}{% endblock %}
+{% block content %}
+<h1>Umsatzsteuer <small>{{ year }}</small></h1>
+<form method="get" action="/steuern" class="searchbar">
+  <label class="sr-only" for="jahr">Jahr</label>
+  <select id="jahr" name="jahr" class="compact">
+    {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn secondary">Anzeigen</button>
+</form>
+
+{% if small_business %}
+<section class="card">
+  <h2>Kleinunternehmer (§ 19 UStG)</h2>
+  <p>Sie weisen keine Umsatzsteuer aus und haben keinen Vorsteuerabzug. Wichtig sind die Umsatzgrenzen:</p>
+  <div class="notice {{ {'ok': 'ok', 'hinweis': 'hinweis', 'fehler': 'fehler'}[ku.level] }}">{{ ku.text }}</div>
+  <table class="table compact">
+    <tr><td>Umsatz {{ ku.year - 1 }} (Grenze {{ ku.limit_previous|geld }})</td><td class="num">{{ ku.previous|geld }}</td></tr>
+    <tr><td>Umsatz {{ ku.year }} bisher (Grenze {{ ku.limit_current|geld }}; für das Folgejahr {{ ku.limit_previous|geld }})</td><td class="num">{{ ku.current|geld }}</td></tr>
+  </table>
+  <div class="meter" role="img" aria-label="{{ ku.pct_current }} % der Grenze von 25.000 €"><span style="width: {{ ku.pct_current }}%"></span></div>
+  <p class="help">Umsatz = festgeschriebene Rechnungen nach Rechnungsdatum (netto, Stornos abgezogen).</p>
+</section>
+{% endif %}
+{% if not small_business or result.rc_in %}
+<section class="card">
+  <h2>Voranmeldungszeiträume {{ year }}</h2>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Zeitraum</th><th class="num">Umsatzsteuer</th><th class="num">Vorsteuer</th><th class="num">Zahllast / Erstattung</th></tr></thead>
+    <tbody>
+    {% for p, r in overview %}
+    <tr class="{% if p == selected %}selected{% endif %}">
+      <td><a href="/steuern?jahr={{ year }}&amp;nr={{ loop.index }}">{{ p.label }}</a></td>
+      <td class="num">{{ r.tax_due|geld }}</td><td class="num">{{ r.tax_deductible|geld }}</td>
+      <td class="num {{ 'neg' if r.payable < 0 else '' }}">{{ r.payable|geld }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    {% if year_total %}
+    <tfoot>
+    <tr class="sum {% if selected == whole_year %}selected{% endif %}">
+      <td><a href="/steuern?jahr={{ year }}&amp;nr=0">Jahr {{ year }} gesamt</a></td>
+      <td class="num">{{ year_total.tax_due|geld }}</td><td class="num">{{ year_total.tax_deductible|geld }}</td>
+      <td class="num {{ 'neg' if year_total.payable < 0 else '' }}">{{ year_total.payable|geld }}</td>
+    </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+  </div>
+  <p class="help">Zeitraum anklicken für die Werte der Voranmeldung; „gesamt“ zeigt das ganze Jahr
+    (Grundlage für die Umsatzsteuer-Jahreserklärung).</p>
+</section>
+
+<section class="card">
+  <h2>{{ selected.label }}</h2>
+  <div class="split">
+    <div>
+      <h3>Umsatzsteuer</h3>
+      <table class="table compact">
+        <thead><tr><th>Steuersatz</th><th class="num">Bemessungsgrundlage</th><th class="num">Steuer</th></tr></thead>
+        {% for rate, (base, tax) in result.outputs.items() %}
+        <tr><td>{{ rate|prozent }}</td><td class="num">{{ base|geld }}</td><td class="num">{{ tax|geld }}</td></tr>
+        {% else %}<tr><td colspan="3" class="help">keine steuerpflichtigen Umsätze</td></tr>{% endfor %}
+        {% if result.reverse_charge_base %}<tr><td>§ 13b (Kunde schuldet die Steuer)</td><td class="num">{{ result.reverse_charge_base|geld }}</td><td class="num">–</td></tr>{% endif %}
+        {% for kz, (base, tax) in result.rc_in.items() %}<tr><td>§ 13b – Sie schulden die Steuer (Kz {{ kz }})</td><td class="num">{{ base|geld }}</td><td class="num">{{ tax|geld }}</td></tr>{% endfor %}
+        {% if result.eu_services_base %}<tr><td>§ 13b an EU-Kunden (Kz 21)</td><td class="num">{{ result.eu_services_base|geld }}</td><td class="num">–</td></tr>{% endif %}
+        <tr class="sum"><td colspan="2">Summe Umsatzsteuer</td><td class="num">{{ result.tax_due|geld }}</td></tr>
+      </table>
+      <h3>Vorsteuer</h3>
+      <table class="table compact">
+        <tr><td>aus Eingangsrechnungen (nach Rechnungsdatum)</td><td class="num">{{ result.input_tax|geld }}</td></tr>
+        {% if result.skonto_correction %}<tr><td>abzüglich Korrektur wegen Skonto</td><td class="num">−{{ result.skonto_correction|geld }}</td></tr>{% endif %}
+        {% if result.rc_input_tax %}<tr><td>aus § 13b-Leistungen (Kz 67)</td><td class="num">{{ result.rc_input_tax|geld }}</td></tr>{% endif %}
+        <tr class="sum"><td>Abziehbare Vorsteuer</td><td class="num">{{ result.tax_deductible|geld }}</td></tr>
+      </table>
+      <p class="big {{ 'neg' if result.payable < 0 else '' }}">{{ 'Zahllast' if result.payable >= 0 else 'Erstattung' }}: {{ result.payable|geld }}</p>
+    </div>
+    <div>
+      <h3>Werte für die Voranmeldung (Vorschlag)</h3>
+      <table class="table compact">
+        <thead><tr><th>Kz.</th><th>Bedeutung</th><th class="num">Wert</th></tr></thead>
+        {% for kz, label, value in result.kennzahlen() %}
+        <tr><td><strong>{{ kz }}</strong></td><td>{{ label }}</td><td class="num">{% if kz in whole_euro_kz %}{{ value|zahl(0) }} €{% else %}{{ value|geld }}{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="help">Die Übermittlung an das Finanzamt (ELSTER) erfolgt nicht über dieses Programm.
+        Bemessungsgrundlagen werden in vollen Euro eingetragen; ELSTER berechnet die Steuer daraus selbst –
+        dadurch kann es Cent-Abweichungen geben.</p>
+    </div>
+  </div>
+  {% if result.zm %}
+  <h3>Zusammenfassende Meldung (Bundeszentralamt für Steuern) – sonstige Leistungen</h3>
+  <table class="table compact"><thead><tr><th>USt-IdNr. des Kunden</th><th>Kunde</th><th class="num">Summe (volle Euro)</th></tr></thead>
+  {% for z in result.zm %}<tr><td>{{ z.ust_id }}</td><td>{{ z.name }}</td><td class="num">{{ z.amount_whole|zahl(0) }} €</td></tr>{% endfor %}</table>
+  {% endif %}
+  <ul class="help">{% for h in result.hints %}<li>{{ h }}</li>{% endfor %}
+    <li>Nur geprüfte Belege – der Prüfbereich zählt nicht mit. Ersetzt keine Steuerberatung.</li></ul>
+</section>
+{% endif %}
+{% endblock %}

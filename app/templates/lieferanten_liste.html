@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Lieferanten{% endblock %}
+{% block content %}
+<h1>Lieferanten{% if archived %} – Archiv{% endif %}</h1>
+{% set base_url = '/lieferanten' %}{% set new_url = '/lieferanten/neu' if can_edit else None %}{% set new_label = 'Neuer Lieferant' %}
+{% include "_suche.html" %}
+<section class="card">
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Nr.</th><th>Name</th><th>Ansprechpartner</th><th>Ort</th><th>E-Mail</th><th>Unsere Kd.-Nr.</th></tr></thead>
+    <tbody>
+    {% for s in rows %}
+    <tr>
+      <td class="nowrap"><a href="/lieferanten/{{ s.id }}">{{ s.number }}</a></td>
+      <td><a href="/lieferanten/{{ s.id }}">{{ s.name }}</a></td>
+      <td>{{ s.contact_person or '' }}</td>
+      <td class="nowrap">{{ s.zip or '' }} {{ s.city or '' }}</td>
+      <td>{% if s.email %}<a href="mailto:{{ s.email }}">{{ s.email }}</a>{% endif %}</td>
+      <td>{{ s.our_customer_number or '' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if more %}<p class="help">Es werden die ersten 200 Treffer angezeigt – bitte die Suche eingrenzen.</p>{% endif %}
+  {% else %}
+  <p>{% if q %}Keine Treffer für „{{ q }}“.{% elif archived %}Keine archivierten Lieferanten.{% else %}Noch keine Lieferanten angelegt.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

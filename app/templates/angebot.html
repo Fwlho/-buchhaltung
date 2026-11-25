@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Angebot {{ quote.number }}{% endblock %}
+{% block mainclass %}page wide{% endblock %}
+{% block content %}
+{% set editable = can_edit and quote.is_editable %}
+<p><a href="/angebote">← Angebote</a>{% if quote.customer %} · <a href="/kunden/{{ quote.customer_id }}">Kunde {{ quote.customer.number }}</a>{% endif %}</p>
+<h1>Angebot {{ quote.number }} <small>{{ quote.recipient_name }}</small>
+  <span class="badge {{ {'angenommen': 'ok', 'abgelehnt': 'danger', 'abgelaufen': 'warn'}.get(quote.effective_status, '') }}">{{ quote.status_label }}</span>
+</h1>
+{% if errors._ %}<div class="notice fehler">{{ errors._ }}</div>{% endif %}
+{% if invoices %}
+<div class="notice hinweis">Rechnungen zu diesem Angebot:
+  {% for d in invoices %}<a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>
+{% endif %}
+
+<div class="split quote-split">
+<div>
+{% if editable %}
+<form method="post" action="/angebote/{{ quote.id }}" novalidate id="angebot-form">
+  {{ csrf_input }}
+  {% if errors and not errors._ %}<div class="notice fehler">Bitte die markierten Angaben prüfen.</div>{% endif %}
+  <div class="grid two">
+    <section class="card">
+      <h2>Empfänger</h2>
+      <div class="field {% if errors.recipient_name %}has-error{% endif %}">
+        <label for="recipient_name">Name / Firma</label>
+        <input type="text" id="recipient_name" name="recipient_name" value="{{ v.recipient_name }}">
+        {% if errors.recipient_name %}<p class="error">{{ errors.recipient_name }}</p>{% endif %}
+      </div>
+      <div class="field">
+        <label for="recipient_address">Anschrift</label>
+        <textarea id="recipient_address" name="recipient_address" rows="3">{{ v.recipient_address }}</textarea>
+      </div>
+      <div class="field {% if errors.object_address %}has-error{% endif %}">
+        <label for="object_address">Objekt (optional)</label>
+        {% if addresses %}
+        <select name="object_address_id" aria-label="Objektadresse übernehmen" class="mb">
+          <option value="">– Objektadresse des Kunden übernehmen … –</option>
+          {% for a in addresses %}<option value="{{ a.id }}">{{ a.label }} – {{ a.street }}, {{ a.city }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <textarea id="object_address" name="object_address" rows="2">{{ v.object_address }}</textarea>
+        {% if errors.object_address %}<p class="error">{{ errors.object_address }}</p>{% endif %}
+      </div>
+    </section>
+    <section class="card">
+      <h2>Daten</h2>
+      <div class="field {% if errors.quote_date %}has-error{% endif %}">
+        <label for="quote_date">Angebotsdatum</label>
+        <input type="text" id="quote_date" name="quote_date" value="{{ v.quote_date }}" placeholder="TT.MM.JJJJ">
+        {% if errors.quote_date %}<p class="error">{{ errors.quote_date }}</p>{% endif %}
+      </div>
+      <div class="field {% if errors.valid_until %}has-error{% endif %}">
+        <label for="valid_until">Gültig bis</label>
+        <input type="text" id="valid_until" name="valid_until" value="{{ v.valid_until }}" placeholder="TT.MM.JJJJ">
+        {% if errors.valid_until %}<p class="error">{{ errors.valid_until }}</p>{% endif %}
+      </div>
+      {% if show_costs %}
+      <div class="field {% if errors.extra_internal_cost %}has-error{% endif %}">
+        <label for="extra_internal_cost">Weitere interne Kosten (netto, z. B. Gemeinkosten)</label>
+        <input type="text" id="extra_internal_cost" name="extra_internal_cost" class="num" inputmode="decimal" value="{{ v.extra_internal_cost }}">
+        {% if errors.extra_internal_cost %}<p class="error">{{ errors.extra_internal_cost }}</p>{% endif %}
+        <p class="help">Nur intern – erscheint nie im Angebot.</p>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="field wide">
+      <label for="intro_text">Einleitungstext</label>
+      <textarea id="intro_text" name="intro_text" rows="2">{{ v.intro_text }}</textarea>
+    </div>
+    <h2>Leistungen <small>Leere Blöcke werden ignoriert. Aus dem Katalog: Eintrag wählen und Bezeichnung leer lassen.</small></h2>
+    {% if small_business %}<p class="help">Kleinunternehmer: alle Positionen mit 0 % USt.</p>{% endif %}
+    {% for r in positions %}{% set i = loop.index0 %}
+    <fieldset class="pos-block {% if errors['pos-' ~ i] %}has-error{% endif %}">
+      <legend>Position {{ i + 1 }}</legend>
+      <input type="hidden" name="pos-{{ i }}-id" value="{{ r.id }}">
+      <div class="pos-grid">
+        <div class="field span2">
+          <label for="pos-{{ i }}-titel">Bezeichnung</label>
+          <input type="text" id="pos-{{ i }}-titel" name="pos-{{ i }}-titel" value="{{ r.titel }}">
+          {% if not r.titel and catalog %}
+          <select name="pos-{{ i }}-katalog" aria-label="Aus Katalog übernehmen, Position {{ i + 1 }}" class="mt">
+            <option value="">– aus Katalog übernehmen –</option>
+            {% for c in catalog %}<option value="{{ c.id }}" {% if r.katalog == c.id|string %}selected{% endif %}>{{ c.title }} ({{ c.price_net|preis }} € / {{ c.unit }})</option>{% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-art">Abrechnung</label>
+          <select id="pos-{{ i }}-art" name="pos-{{ i }}-art">
+            {% for key, label in billing_labels.items() %}<option value="{{ key }}" {% if r.art == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-satz">USt</label>
+          <select id="pos-{{ i }}-satz" name="pos-{{ i }}-satz" {% if small_business %}disabled{% endif %}>
+            <option value="">Standard</option>
+            {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field span4">
+          <label for="pos-{{ i }}-beschreibung">Beschreibung (optional)</label>
+          <textarea id="pos-{{ i }}-beschreibung" name="pos-{{ i }}-beschreibung" rows="1">{{ r.beschreibung }}</textarea>
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-preis">Preis / Stundensatz / Pauschale €</label>
+          <input type="text" class="num" inputmode="decimal" id="pos-{{ i }}-preis" name="pos-{{ i }}-preis" value="{{ r.preis }}">
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-menge">Menge <span class="help">(bei Menge × Preis)</span></label>
+          <input type="text" class="num" inputmode="decimal" id="pos-{{ i }}-menge" name="pos-{{ i }}-menge" value="{{ r.menge }}">
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-einheit">Einheit</label>
+          <select id="pos-{{ i }}-einheit" name="pos-{{ i }}-einheit">
+            {% for u in units %}<option value="{{ u }}" {% if r.einheit == u %}selected{% endif %}>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-stunden">Stunden × Personen <span class="help">(bei Stunden)</span></label>
+          <div class="pair">
+            <input type="text" class="num" inputmode="decimal" id="pos-{{ i }}-stunden" name="pos-{{ i }}-stunden" value="{{ r.stunden }}" aria-label="Stunden Position {{ i + 1 }}">
+            <input type="text" class="num" inputmode="numeric" name="pos-{{ i }}-personen" value="{{ r.personen }}" placeholder="1" aria-label="Personen Position {{ i + 1 }}">
+          </div>
+        </div>
+        {% if recurring_on %}
+        <div class="field check span4">
+          <label><input type="checkbox" name="pos-{{ i }}-wdh" value="1" {% if r.wdh %}checked{% endif %}> wiederkehrende Leistung (Dauerauftrag)</label>
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-intervall">Intervall</label>
+          <select id="pos-{{ i }}-intervall" name="pos-{{ i }}-intervall">
+            <option value="">–</option>
+            {% for key, (label, vpm) in intervals.items() %}<option value="{{ key }}" {% if r.intervall == key %}selected{% endif %}>{{ label }}{% if key != 'individuell' %} (≈ {{ vpm|zahl(2) }}/Monat){% endif %}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-einsaetze">Einsätze/Monat <span class="help">(leer = Standard)</span></label>
+          <input type="text" class="num" inputmode="decimal" id="pos-{{ i }}-einsaetze" name="pos-{{ i }}-einsaetze" value="{{ r.einsaetze }}">
+        </div>
+        <div class="field">
+          <label for="pos-{{ i }}-laufzeit">Laufzeit (Monate)</label>
+          <input type="text" class="num" inputmode="numeric" id="pos-{{ i }}-laufzeit" name="pos-{{ i }}-laufzeit" value="{{ r.laufzeit }}">
+        </div>
+        {% endif %}
+        {% if show_costs %}
+        <div class="field internal">
+          <label for="pos-{{ i }}-kosten">Interner Kostensatz €</label>
+          <input type="text" class="num" inputmode="decimal" id="pos-{{ i }}-kosten" name="pos-{{ i }}-kosten" value="{{ r.kosten }}">
+        </div>
+        {% endif %}
+        {% if r.titel %}<div class="field check"><label><input type="checkbox" name="pos-{{ i }}-entfernen" value="1"> Position entfernen</label></div>{% endif %}
+      </div>
+      {% if errors['pos-' ~ i] %}<p class="error">{{ errors['pos-' ~ i] }}</p>{% endif %}
+    </fieldset>
+    {% endfor %}
+
+    <h2>Zusatzkosten <small>Blöcke frei benennbar, z. B. Anfahrt, Material, Entsorgung</small></h2>
+    <datalist id="bloecke">{% for b in block_suggestions %}<option value="{{ b }}">{% endfor %}</datalist>
+    <div class="table-wrap">
+    <table class="table positions">
+      <thead><tr><th>Block</th><th>Beschreibung</th><th class="num">Menge</th><th>Einheit</th><th class="num">Einzelpreis €</th><th>USt</th><th></th></tr></thead>
+      <tbody>
+      {% for c in costs %}{% set j = loop.index0 %}
+      <tr class="{% if errors['kost-' ~ j] %}has-error{% endif %}">
+        <td><input type="text" name="kost-{{ j }}-block" value="{{ c.block }}" list="bloecke" aria-label="Block Zeile {{ j + 1 }}"></td>
+        <td><input type="text" name="kost-{{ j }}-beschreibung" value="{{ c.beschreibung }}" aria-label="Beschreibung Zeile {{ j + 1 }}">
+          {% if errors['kost-' ~ j] %}<p class="error">{{ errors['kost-' ~ j] }}</p>{% endif %}</td>
+        <td><input type="text" class="num" inputmode="decimal" name="kost-{{ j }}-menge" value="{{ c.menge }}" aria-label="Menge Zeile {{ j + 1 }}"></td>
+        <td><input type="text" name="kost-{{ j }}-einheit" value="{{ c.einheit }}" placeholder="km, Stück …" aria-label="Einheit Zeile {{ j + 1 }}" class="short"></td>
+        <td><input type="text" class="num" inputmode="decimal" name="kost-{{ j }}-preis" value="{{ c.preis }}" aria-label="Einzelpreis Zeile {{ j + 1 }}"></td>
+        <td><select name="kost-{{ j }}-satz" aria-label="Steuersatz Zeile {{ j + 1 }}" {% if small_business %}disabled{% endif %}>
+          <option value="">Standard</option>
+          {% for rate in vat_rates %}<option value="{{ rate }}" {% if c.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}</select></td>
+        <td>{% if c.block or c.preis %}<label class="inline-check"><input type="checkbox" name="kost-{{ j }}-entfernen" value="1"> entf.</label>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="row"><button type="submit" name="aktion" value="mehr_zeilen" class="btn small secondary">Speichern und weitere Zeilen</button></div>
+
+    <div class="field wide">
+      <label for="closing_text">Schlusstext</label>
+      <textarea id="closing_text" name="closing_text" rows="2">{{ v.closing_text }}</textarea>
+    </div>
+    <div class="field wide">
+      <label for="notes">Interne Notiz (erscheint nicht im Angebot)</label>
+      <textarea id="notes" name="notes" rows="2">{{ v.notes }}</textarea>
+    </div>
+  </section>
+  <div class="actions sticky-actions">
+    <button type="submit" name="aktion" value="pdf" formtarget="_blank" class="btn secondary">Speichern und PDF</button>
+    <button type="submit" name="aktion" value="speichern" class="btn primary">Speichern</button>
+  </div>
+</form>
+{% else %}
+<section class="card preview">
+  <iframe src="/angebote/{{ quote.id }}/pdf" title="Angebot als PDF"></iframe>
+  <p class="help"><a href="/angebote/{{ quote.id }}/pdf" target="_blank" rel="noopener">PDF in neuem Fenster öffnen</a></p>
+</section>
+{% endif %}
+{% if mail and can_edit %}{% include "_email_entwurf.html" %}{% endif %}
+</div>
+
+<aside>
+  <section class="card calc">
+    <h2>Kalkulation</h2>
+    <p class="help">Stand der letzten Speicherung.</p>
+    <table class="table compact">
+      <tr><td>Leistungen</td><td class="num">{{ result.block_positions|geld }}</td></tr>
+      {% for b in result.cost_blocks %}<tr><td>{{ b.label }}</td><td class="num">{{ b.net|geld }}</td></tr>{% endfor %}
+      <tr class="sum"><td>Summe netto</td><td class="num">{{ result.net_total|geld }}</td></tr>
+      {% for t in result.tax_lines %}{% if t.vat %}<tr><td>USt {{ t.rate|prozent }}</td><td class="num">{{ t.vat|geld }}</td></tr>{% endif %}{% endfor %}
+      <tr class="grand"><td>Angebotssumme</td><td class="num">{{ result.gross_total|geld }}</td></tr>
+    </table>
+    {% if result.monthly_net %}
+    <h3>Wiederkehrend</h3>
+    <table class="table compact">
+      {% for p in result.positions if p.recurring %}
+      <tr><td>{{ p.title }}<br><span class="help">{{ p.net_per_visit|geld }} × {{ p.visits_per_month|zahl(2) }} Einsätze</span></td>
+        <td class="num">{{ p.monthly|geld }}/Monat</td></tr>
+      {% endfor %}
+      <tr class="sum"><td>Monatlich netto</td><td class="num">{{ result.monthly_net|geld }}</td></tr>
+      <tr><td>Jährlich netto</td><td class="num">{{ (result.monthly_net * 12)|geld }}</td></tr>
+    </table>
+    {% endif %}
+    {% if show_costs %}
+    <h3>Intern</h3>
+    {% if result.internal_cost is not none %}
+    <table class="table compact internal">
+      <tr><td>Interne Kosten</td><td class="num">{{ result.internal_cost|geld }}</td></tr>
+      <tr class="sum"><td>Marge</td><td class="num">{{ result.margin_abs|geld }}{% if result.margin_pct is not none %} ({{ result.margin_pct|zahl(1) }} %){% endif %}</td></tr>
+    </table>
+    {% else %}<p class="help">Keine Kostensätze hinterlegt – Kostensatz je Position oder „Weitere interne Kosten“ eintragen.</p>{% endif %}
+    {% endif %}
+  </section>
+
+  {% if can_edit %}
+  <section class="card">
+    <h2>Status &amp; Aktionen</h2>
+    <div class="stack">
+      {% if quote.status == 'entwurf' %}
+      <form method="post" action="/angebote/{{ quote.id }}/status">{{ csrf_input }}<input type="hidden" name="status" value="versendet">
+        <button type="submit" class="btn secondary full">Als versendet markieren</button></form>
+      {% endif %}
+      {% if quote.status in ('entwurf', 'versendet') %}
+      <form method="post" action="/angebote/{{ quote.id }}/status">{{ csrf_input }}<input type="hidden" name="status" value="angenommen">
+        <button type="submit" class="btn secondary full">Angenommen</button></form>
+      <form method="post" action="/angebote/{{ quote.id }}/status">{{ csrf_input }}<input type="hidden" name="status" value="abgelehnt">
+        <button type="submit" class="btn secondary full">Abgelehnt</button></form>
+      {% endif %}
+      {% if quote.status in ('versendet', 'abgelehnt') and not invoices %}
+      <form method="post" action="/angebote/{{ quote.id }}/status">{{ csrf_input }}<input type="hidden" name="status" value="entwurf">
+        <button type="submit" class="btn link">Wieder auf Entwurf setzen</button></form>
+      {% endif %}
+      {% if order %}
+      <a class="btn secondary full" href="/auftraege/{{ order.id }}">Zum Auftrag {{ order.number }}</a>
+      {% elif can_order and quote.status != 'abgelehnt' %}
+      <form method="post" action="/auftraege/aus-angebot/{{ quote.id }}">{{ csrf_input }}
+        <button type="submit" class="btn secondary full">Auftrag anlegen</button></form>
+      <p class="help">Übernimmt Kunde, Objekt, Leistungen und Preise in die Auftragsübersicht und markiert das Angebot als angenommen.</p>
+      {% endif %}
+      {% if can_invoice and quote.status != 'abgelehnt' %}
+      <form method="post" action="/angebote/{{ quote.id }}/rechnung">{{ csrf_input }}
+        <button type="submit" class="btn primary full">In Rechnung umwandeln</button></form>
+      <p class="help">Erstellt einen Rechnungsentwurf mit allen Positionen{% if result.monthly_net %} (wiederkehrende Leistungen als ein Monat){% endif %} und markiert das Angebot als angenommen.</p>
+      {% if recurring_on and result.monthly_net and quote.status != 'abgelehnt' %}
+      <form method="post" action="/vertraege/aus-angebot/{{ quote.id }}">{{ csrf_input }}
+        <button type="submit" class="btn secondary full">Vertrag für monatliche Abrechnung anlegen</button></form>
+      <p class="help">Aus den wiederkehrenden Positionen entsteht ein Vertrag; das Programm legt dann jeden Monat
+        automatisch einen Rechnungsentwurf an.</p>
+      {% endif %}
+      {% endif %}
+      <form method="post" action="/angebote/{{ quote.id }}/kopieren">{{ csrf_input }}
+        <button type="submit" class="btn secondary full">Als neues Angebot kopieren</button></form>
+      {% if not invoices and quote.status != 'angenommen' %}
+      <form method="post" action="/angebote/{{ quote.id }}/loeschen">{{ csrf_input }}
+        <button type="submit" class="btn small danger">Angebot löschen</button></form>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+  {% if editable %}<p class="help"><a href="/angebote/{{ quote.id }}/pdf" target="_blank" rel="noopener">PDF ansehen (letzter gespeicherter Stand)</a></p>{% endif %}
+
+  <details class="card history">
+    <summary>Verlauf ({{ history|length }})</summary>
+    <ul>{% for e, name in history %}<li>{{ e.created_at|datumzeit }} – {{ name }}: {{ e.action }}</li>{% endfor %}</ul>
+  </details>
+</aside>
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Bestätigungscode{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Bestätigungscode</h1>
+  {% if app_mode %}
+  <p>Bitte geben Sie den 6-stelligen Code aus Ihrer <strong>Authenticator-App</strong> ein.
+    Handy nicht zur Hand? Dann einen Ihrer <strong>Notfall-Codes</strong> (z. B. <code>abcde-fghjk</code>) eintippen.</p>
+  {% else %}
+  <p>Bitte geben Sie den 6-stelligen Code ein, den wir an <strong>{{ email }}</strong> geschickt haben.</p>
+  {% endif %}
+  {% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+  <form method="post" action="/login/code">
+    {{ csrf_input }}
+    <div class="field">
+      <label for="code">Code</label>
+      <input type="text" id="code" name="code" {% if not app_mode %}inputmode="numeric" pattern="[0-9 ]*" maxlength="7"{% else %}maxlength="12"{% endif %}
+             autocomplete="one-time-code" class="code-input" required autofocus>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Anmelden</button></div>
+  </form>
+  <form method="post" action="/login/code/neu" class="row">
+    {{ csrf_input }}
+    {% if not app_mode %}<button type="submit" class="btn link">Neuen Code anfordern</button>{% endif %}
+    <a href="/login" class="btn link">Anderes Konto</a>
+  </form>
+</section>
+{% endblock %}

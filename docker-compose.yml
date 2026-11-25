@@ -1,0 +1,118 @@
+# Server-Betrieb: Programm + Hintergrund-Prozess + PostgreSQL + Caddy (automatisches HTTPS).
+# Einrichtung und Pflege: siehe BETRIEB.md. Alle Geheimnisse stehen in der Datei .env (nie weitergeben).
+#
+# Härtung (Etappe 3, 11.11.2026):
+# - Drei Netze: „web“ (nur Caddy ↔ Programm), „intern“ (Programm/Hintergrund ↔ Datenbank, OHNE Internet) und
+#   „ausgang“ (nur Programm/Hintergrund, für E-Mail-Abruf, System-Mails und KI). Die Datenbank ist damit weder
+#   aus dem Internet noch von Caddy aus erreichbar und kann selbst nichts nach außen senden.
+# - Keine Sonderrechte (cap_drop ALL, no-new-privileges), Programmdateien schreibgeschützt (read_only),
+#   beschreibbar nur /daten (verschlüsselte Belege) und ein Zwischenspeicher im Arbeitsspeicher (/tmp).
+# - Protokolle je Dienst auf 5 × 10 MB begrenzt (Datensparsamkeit, volle Platte verhindern).
+name: buchhaltung
+
+x-protokoll: &protokoll
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+x-programm: &programm
+  build: .
+  image: buchhaltung:aktuell
+  restart: unless-stopped
+  env_file: .env
+  environment: &programm-umgebung
+    APP_ENV: server
+    DATABASE_URL: postgresql+psycopg://buchhaltung:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}@db:5432/buchhaltung
+    DATA_DIR: /daten
+    COOKIE_SECURE: "true"
+  volumes:
+    - dateien:/daten
+  read_only: true
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  networks: [intern, ausgang]
+  depends_on:
+    db:
+      condition: service_healthy
+  <<: *protokoll
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: buchhaltung
+      POSTGRES_USER: buchhaltung
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - datenbank:/var/lib/postgresql/data
+    security_opt: ["no-new-privileges:true"]
+    networks: [intern]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buchhaltung -d buchhaltung"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    <<: *protokoll
+
+  app:
+    <<: *programm
+    environment:
+      <<: *programm-umgebung
+      BACKGROUND_JOBS: "false"   # Hintergrund-Aufgaben laufen im eigenen Dienst „worker“
+    networks: [web, intern, ausgang]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  worker:
+    <<: *programm
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      app:
+        condition: service_started   # „app“ migriert die Datenbank beim Start
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN in .env setzen}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-daten:/data
+      - caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    networks: [web]
+    depends_on:
+      app:
+        condition: service_healthy
+    <<: *protokoll
+
+networks:
+  web: {}
+  intern:
+    internal: true   # kein Internet: Die Datenbank kann nichts nach außen senden
+  ausgang: {}
+
+volumes:
+  datenbank:
+  dateien:
+  caddy-daten:
+  caddy-config:

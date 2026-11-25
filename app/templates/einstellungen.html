@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen – {{ group.title }}{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+{% set active = group.key %}
+<div class="settings-layout">
+{% include "_einstellungen_nav.html" %}
+<div>
+<section class="card">
+  <h2>{{ group.title }}</h2>
+  {% if not can_edit %}<p class="notice hinweis">Sie haben nur Leserechte für die Einstellungen.</p>{% endif %}
+  {% set action = '/einstellungen/' ~ group.key %}
+  {% set submit_label = 'Speichern' %}
+  {% set disabled = not can_edit %}
+  {% set back_url = '/einstellungen/design' %}
+  {% set prev_url = None %}
+  {% include "_gruppe_form.html" %}
+  {% if group.key == 'email' and can_edit %}
+  <p class="row"><a class="btn secondary" href="/einstellungen/email/diagnose">Verbindung testen und Ordner anzeigen</a>
+    <span class="help">Bitte vorher speichern.</span></p>
+  {% endif %}
+</section>
+</div>
+</div>
+{% endblock %}

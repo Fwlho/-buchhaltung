@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Bankabgleich{% endblock %}
+{% block content %}
+<h1>Bankabgleich <small>{{ open_count }} offene Umsätze</small></h1>
+
+{% if can_edit %}
+<section class="card">
+  <h2>Kontoauszug importieren</h2>
+  <p class="help">CSV-Datei aus dem Online-Banking oder CAMT.053 (XML, auch als ZIP). Bereits importierte Umsätze
+    werden erkannt und übersprungen – überlappende Zeiträume sind also kein Problem. Es gibt keine Verbindung zur
+    Bank; das Programm liest nur die Datei.</p>
+  <form method="post" action="/bank/import" enctype="multipart/form-data" class="row">
+    {{ csrf_input }}
+    <label class="sr-only" for="datei">Kontoauszug</label>
+    <input type="file" id="datei" name="datei" accept=".csv,.txt,.xml,.zip,text/csv,application/xml,application/zip" required>
+    <button type="submit" class="btn primary">Importieren</button>
+  </form>
+</section>
+{% endif %}
+
+<form method="get" action="/bank" class="searchbar">
+  <label class="sr-only" for="q">Suchen</label>
+  <input type="search" id="q" name="q" value="{{ q }}" placeholder="Name oder Verwendungszweck …">
+  <select name="zeigen" class="compact" aria-label="Anzeigen">
+    {% for key, label in [('offen', 'offene'), ('erledigt', 'erledigte'), ('alle', 'alle')] %}
+    <option value="{{ key }}" {% if show == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn secondary">Filtern</button>
+  <span class="spacer"></span>
+  {% if can_edit and sure_count %}
+  <button type="submit" form="sichere" class="btn primary">{{ sure_count }} sichere Vorschläge übernehmen</button>
+  {% endif %}
+</form>
+{% if can_edit and sure_count %}
+<form id="sichere" method="post" action="/bank/vorschlaege">{{ csrf_input }}</form>
+<p class="help">„Sicher“ heißt: Rechnungsnummer im Verwendungszweck und Betrag stimmen genau.</p>
+{% endif %}
+
+<section class="card">
+  {% if txs %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Datum</th><th>Auftraggeber / Empfänger</th><th>Verwendungszweck</th><th class="num">Betrag</th>
+      <th>Zuordnung / Vorschlag</th></tr></thead>
+    <tbody>
+    {% for tx in txs %}
+    {% set s = best.get(tx.id) %}
+    <tr>
+      <td class="nowrap">{{ tx.booking_date|datum }}</td>
+      <td>{{ tx.name or '–' }}</td>
+      <td class="help">{{ (tx.purpose or '')[:120] }}</td>
+      <td class="num nowrap {{ 'neg' if tx.amount < 0 else '' }}">{{ tx.amount|geld }}</td>
+      <td>
+        {% if tx.category %}<span class="badge">{{ tx.category_label }}</span>
+        {% elif tx.payments %}{% for p in tx.payments %}<span class="badge ok">{{ p.amount|geld }} zugeordnet</span> {% endfor %}
+          {% if tx.remaining > 0 %}<span class="help">frei: {{ tx.remaining|geld }}</span>{% endif %}
+        {% elif s %}<span class="badge {{ 'ok' if s.sure else '' }}">{{ s.doc.number or 'Beleg' }}</span>
+          <span class="help">{{ s.reasons|join(', ') }}</span>
+        {% else %}<span class="help">kein Vorschlag</span>{% endif %}
+        <a href="/bank/umsatz/{{ tx.id }}" class="btn small secondary">{{ 'Zuordnen' if can_edit and tx.remaining > 0 else 'Ansehen' }}</a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p>{% if show == 'offen' and not q %}Keine offenen Umsätze. Importieren Sie einen Kontoauszug.{% else %}Keine Umsätze für diese Auswahl.{% endif %}</p>
+  {% endif %}
+</section>
+
+{% if imports %}
+<section class="card">
+  <h2>Letzte Importe</h2>
+  <table class="table compact">
+    <thead><tr><th>Importiert am</th><th>Datei</th><th>Format</th><th class="num">neu</th><th class="num">schon vorhanden</th><th></th></tr></thead>
+    {% for imp in imports %}
+    <tr>
+      <td class="nowrap">{{ imp.created_at|datumzeit }}</td><td>{{ imp.file.original_name }}</td>
+      <td>{{ imp.format|upper }}</td><td class="num">{{ imp.count_new }}</td><td class="num">{{ imp.count_duplicate }}</td>
+      <td>
+        {% if imp.status == 'zuordnung' %}<a href="/bank/import/{{ imp.id }}" class="btn small secondary">Spalten zuordnen</a>{% endif %}
+        {% if can_edit %}
+        <form method="post" action="/bank/import/{{ imp.id }}/loeschen" class="inline">{{ csrf_input }}
+          <button type="submit" class="btn small secondary">Entfernen</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="help">Entfernen geht nur, solange kein Umsatz des Auszugs zugeordnet ist.</p>
+</section>
+{% endif %}
+{% endblock %}

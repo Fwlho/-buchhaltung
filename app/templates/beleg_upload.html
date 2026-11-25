@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Belege hochladen{% endblock %}
+{% block content %}
+<p><a href="/eingangsrechnungen">← Eingangsrechnungen</a></p>
+<h1>Eingangsrechnungen hochladen</h1>
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+<section class="card">
+  <p class="intro">Wählen Sie eine oder mehrere Rechnungen (PDF, JPG, PNG oder E-Rechnung als XML, je höchstens 25 MB).
+    Das Programm liest Rechnungsnummer, Datum, Absender und Beträge automatisch aus – bei E-Rechnungen
+    (ZUGFeRD, XRechnung) exakt aus den eingebetteten Daten.
+    Die Belege landen zuerst im <strong>Prüfbereich</strong> und zählen erst mit, wenn Sie sie dort
+    geprüft und übernommen haben.</p>
+  <form method="post" action="/eingangsrechnungen/hochladen" enctype="multipart/form-data">
+    {{ csrf_input }}
+    <div class="field">
+      <label for="dateien">Dateien</label>
+      <input type="file" id="dateien" name="dateien" accept="application/pdf,image/png,image/jpeg,application/xml,text/xml,.xml" multiple required>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Hochladen und auslesen</button></div>
+  </form>
+  <p class="help">Fotos und eingescannte Rechnungen ohne Textebene werden per Texterkennung (OCR) gelesen –
+    bitte die Beträge dann besonders sorgfältig prüfen. {{ ocr_status }}</p>
+</section>
+{% endblock %}

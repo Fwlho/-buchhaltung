@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Änderungsprotokoll{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+{% set active = 'protokoll' %}
+<div class="settings-layout">
+{% include "_einstellungen_nav.html" %}
+<div>
+<section class="card">
+  <h2>Änderungsprotokoll</h2>
+  <p class="intro">Wer hat wann was geändert (die letzten 200 Einträge). Einträge lassen sich nicht bearbeiten oder löschen.</p>
+  {% if entries %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Zeitpunkt</th><th>Benutzer</th><th>Aktion</th><th>Bereich</th><th>Änderungen</th></tr></thead>
+    <tbody>
+    {% for e in entries %}
+      <tr>
+        <td class="nowrap">{{ e.created_at|datumzeit }}</td>
+        <td>{{ names.get(e.user_id, '–') }}</td>
+        <td>{{ e.action }}</td>
+        <td>{{ e.entity }}{% if e.entity_id %} ({{ e.entity_id }}){% endif %}</td>
+        <td class="changes">
+          {% if e.changes %}
+            {% for key, change in e.changes.items() %}
+              <div><strong>{{ key }}</strong>:
+              {% if change is mapping and 'alt' in change %}
+                {{ change.alt if change.alt not in (None, '') else '–' }} → {{ change.neu if change.neu not in (None, '') else '–' }}
+              {% else %}{{ change }}{% endif %}</div>
+            {% endfor %}
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p>Noch keine Einträge.</p>
+  {% endif %}
+</section>
+</div>
+</div>
+{% endblock %}

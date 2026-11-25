@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Auftrag {{ order.number }}{% endblock %}
+{% block content %}
+<p><a href="{{ back }}">← Aufträge</a></p>
+<h1>{{ order.number }} · {{ order.title }} <small>{{ order.customer.name }} · <span class="badge {{ {'offen': 'warn', 'arbeit': 'info', 'erledigt': 'ok'}.get(order.status, '') }}">{{ order.status_label }}</span></small></h1>
+{% if errors._ %}<div class="notice fehler">{{ errors._ }}</div>{% endif %}
+{% if suggest and can_edit %}
+<form method="post" action="/auftraege/{{ order.id }}/stand" class="notice hinweis inline-notice">{{ csrf_input }}
+  <input type="hidden" name="status" value="erledigt"><input type="hidden" name="zurueck" value="{{ back.split('#')[0] }}">
+  Alle Rechnungen zu diesem Auftrag sind bezahlt. <button type="submit" class="btn small secondary">Als erledigt markieren</button></form>
+{% endif %}
+
+<form method="post" action="/auftraege/{{ order.id }}" novalidate>
+  {{ csrf_input }}
+  <fieldset {% if not can_edit %}disabled{% endif %}>
+  <section class="card">
+    <div class="grid">
+      <div class="field wide {% if errors.title %}has-error{% endif %}">
+        <label for="title">Bezeichnung <span class="req">*</span></label>
+        <input type="text" id="title" name="title" value="{{ v.title }}" maxlength="200">
+        {% if errors.title %}<p class="error">{{ errors.title }}</p>{% endif %}
+      </div>
+      <div class="field {% if errors.kind %}has-error{% endif %}">
+        <label for="kind">Art</label>
+        <select id="kind" name="kind">
+          {% for key, label in kinds.items() %}<option value="{{ key }}" {% if v.kind == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <p class="help">Beim Dauerauftrag sind die Preise Monatsbeträge.</p>
+      </div>
+      <div class="field {% if errors.status %}has-error{% endif %}">
+        <label for="status">Stand</label>
+        <select id="status" name="status">
+          {% for key, label in statuses.items() %}<option value="{{ key }}" {% if v.status == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field wide {% if errors.address_id %}has-error{% endif %}">
+        <label for="address_id">Objekt (Einsatzort)</label>
+        <select id="address_id" name="address_id">
+          <option value="">{% if v.object_address %}wie unten eingetragen{% else %}Hauptadresse des Kunden{% endif %}</option>
+          {% for a in addresses %}<option value="{{ a.id }}" {% if v.address_id == a.id|string %}selected{% endif %}>{{ a.label }}{% if a.street or a.city %} – {{ a.street or '' }} {{ a.zip or '' }} {{ a.city or '' }}{% endif %}</option>{% endfor %}
+        </select>
+        {% if errors.address_id %}<p class="error">{{ errors.address_id }}</p>{% endif %}
+        <p class="help">Objekt-Adressen pflegen Sie beim Kunden{% if ctx.can('kunden') %} (<a href="/kunden/{{ order.customer.id }}">{{ order.customer.name }}</a>){% endif %}. Je Objekt zeigt die Übersicht eine Karte.</p>
+      </div>
+      {% if v.object_address or not addresses %}
+      <div class="field wide">
+        <label for="object_address">Objekt als Text (nur ohne Objekt-Adresse oben)</label>
+        <textarea id="object_address" name="object_address" rows="2">{{ v.object_address }}</textarea>
+      </div>
+      {% endif %}
+      <div class="field wide">
+        <label for="description">Beschreibung</label>
+        <textarea id="description" name="description" rows="2">{{ v.description }}</textarea>
+      </div>
+    </div>
+  </section>
+
+  {% if show_prices %}
+  <section class="card">
+    <h2>Leistungen und Preise <small>netto{% if order.kind == 'dauer' %} je Monat{% endif %}</small></h2>
+    {% for key, msg in errors.items() if key.startswith('pos-') %}<p class="error">Zeile {{ key[4:]|int + 1 }}: {{ msg }}</p>{% endfor %}
+    <div class="table-wrap">
+    <table class="table positions">
+      <thead><tr><th>Bezeichnung / Beschreibung</th><th>Menge</th><th>Einheit</th><th>Preis netto</th><th>USt</th></tr></thead>
+      <tbody>
+      {% for r in rows %}{% set i = loop.index0 %}
+      <tr class="{% if errors['pos-' ~ i] %}has-error{% endif %}">
+        <td class="desc"><input type="text" name="pos-{{ i }}-titel" value="{{ r.titel }}" aria-label="Bezeichnung Zeile {{ i + 1 }}">
+          <textarea name="pos-{{ i }}-beschreibung" rows="1" aria-label="Beschreibung Zeile {{ i + 1 }}">{{ r.beschreibung }}</textarea></td>
+        <td><input type="text" name="pos-{{ i }}-menge" value="{{ r.menge }}" class="num" aria-label="Menge Zeile {{ i + 1 }}"></td>
+        <td><select name="pos-{{ i }}-einheit" aria-label="Einheit Zeile {{ i + 1 }}">{% for u in units %}<option {% if r.einheit == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td>
+        <td><input type="text" name="pos-{{ i }}-preis" value="{{ r.preis }}" class="num" aria-label="Preis Zeile {{ i + 1 }}"></td>
+        <td><select name="pos-{{ i }}-satz" aria-label="Steuersatz Zeile {{ i + 1 }}"><option value="">Standard</option>
+          {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}</select></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <p class="help">Leere Zeilen werden ignoriert; nach dem Speichern kommen zwei neue dazu. Summe zurzeit: <strong>{{ order.net_total|geld }}</strong> netto{% if order.kind == 'dauer' %} je Monat{% endif %}.</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Notizen und Aufgaben</h2>
+    <div class="field wide">
+      <label for="notes">Notiz (intern)</label>
+      <textarea id="notes" name="notes" rows="3">{{ v.notes }}</textarea>
+    </div>
+    <p class="help">Aufgaben (Abhakliste) – leere Zeilen werden ignoriert:</p>
+    <ul class="plain tasks">
+      {% for t in tasks %}{% set i = loop.index0 %}
+      <li><input type="checkbox" id="aufgabe-{{ i }}-erledigt" name="aufgabe-{{ i }}-erledigt" value="1" {% if t.erledigt %}checked{% endif %} aria-label="Aufgabe {{ i + 1 }} erledigt">
+        <input type="text" name="aufgabe-{{ i }}-text" value="{{ t.text }}" maxlength="300" aria-label="Aufgabe {{ i + 1 }}" class="grow"></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% if can_edit %}<div class="actions"><button type="submit" class="btn primary">Speichern</button></div>{% endif %}
+  </fieldset>
+</form>
+
+<section class="card">
+  <h2>Zugehörige Belege</h2>
+  <ul class="plain">
+    {% if order.quote %}<li>Angebot {% if can_quotes %}<a href="/angebote/{{ order.quote.id }}">{{ order.quote.number }}</a>{% else %}{{ order.quote.number }}{% endif %} <span class="muted">({{ order.quote.status_label }})</span></li>{% endif %}
+    {% if order.contract %}<li>Vertrag {% if can_invoices %}<a href="/vertraege/{{ order.contract.id }}">{{ order.contract.title }}</a>{% else %}{{ order.contract.title }}{% endif %} <span class="muted">({{ order.contract.status_label }})</span></li>{% endif %}
+    {% for d in docs %}<li>{{ 'Stornorechnung' if d.kind == 'storno' else 'Rechnung' }} {% if can_invoices %}<a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a>{% else %}{{ d.number or 'Entwurf' }}{% endif %}
+      {% if show_prices %}<span class="muted">{{ d.gross_total|geld }}</span>{% endif %}
+      {% if d.is_draft %}<span class="badge">Entwurf</span>{% else %}<span class="badge {{ {'bezahlt': 'ok', 'offen': 'warn', 'storniert': 'danger'}.get(d.status, '') }}">{{ d.status_label }}</span>{% endif %}</li>{% endfor %}
+  </ul>
+  {% if not order.quote and not order.contract and not docs %}<p class="help">Noch keine Belege.</p>{% endif %}
+  {% if can_edit %}
+  <div class="obj-actions">
+    {% if can_invoice and show_prices and order.lines %}
+    <form method="post" action="/auftraege/{{ order.id }}/rechnung" class="inline-form">{{ csrf_input }}<button type="submit" class="btn secondary">Rechnung erstellen</button></form>
+    {% if order.kind == 'dauer' and contracts_on and not order.contract_id %}
+    <form method="post" action="/auftraege/{{ order.id }}/vertrag" class="inline-form">{{ csrf_input }}<button type="submit" class="btn secondary">Vertrag anlegen</button></form>
+    {% endif %}
+    {% endif %}
+    {% if not order.contract_id and not docs %}
+    <form method="post" action="/auftraege/{{ order.id }}/loeschen" class="inline-form">{{ csrf_input }}<button type="submit" class="btn small danger">Auftrag löschen</button></form>
+    {% endif %}
+  </div>
+  {% if order.kind == 'dauer' %}<p class="help">„Rechnung erstellen“ rechnet einen Monat ab. Für die monatliche Abrechnung legen Sie einen Vertrag an{% if not contracts_on %} (dazu in den Einstellungen unter Angebote „Wiederkehrende Leistungen“ einschalten){% endif %}.</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

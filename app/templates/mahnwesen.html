@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Mahnwesen{% endblock %}
+{% block content %}
+<h1>Mahnwesen</h1>
+<section class="card">
+  <h2>Überfällige Rechnungen</h2>
+  <p class="help">Festgeschriebene, noch offene Ausgangsrechnungen nach Ablauf der Fälligkeit. Die nächste Stufe wird
+    vorgeschlagen, sobald die Frist der vorigen abgelaufen ist (plus Karenztage aus den Einstellungen).
+    Mahnungen werden nie automatisch versendet.</p>
+  {% if candidates %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Rechnung</th><th>Kunde</th><th>Fällig</th><th class="num">offen</th><th>bisher</th><th>Nächste Stufe</th></tr></thead>
+    <tbody>
+    {% for c in candidates %}
+    <tr>
+      <td class="nowrap"><a href="/rechnungen/{{ c.doc.id }}">{{ c.doc.number }}</a></td>
+      <td>{{ c.doc.recipient_name }}</td>
+      <td class="nowrap overdue">{{ c.doc.due_date|datum }} <span class="help">({{ c.days_overdue }} Tage)</span></td>
+      <td class="num nowrap">{{ c.doc.open_amount|geld }}</td>
+      <td>{% if c.last %}<a href="/mahnwesen/{{ c.last.id }}">{{ c.last.level_name }}</a> <span class="help">Frist {{ c.last.pay_until|datum }}</span>{% else %}–{% endif %}</td>
+      <td>
+        {% if c.next_level %}
+          {% if can_edit %}
+          <form method="post" action="/mahnwesen/rechnung/{{ c.doc.id }}" class="inline">{{ csrf_input }}
+            <button type="submit" class="btn small {{ 'primary' if c.ready else 'secondary' }}">{{ c.next_level.name }} erstellen</button>
+          </form>
+          {% else %}{{ c.next_level.name }}{% endif %}
+          {% if not c.ready %}<span class="help">vorgesehen ab {{ c.due_since|datum }}</span>{% endif %}
+        {% else %}<span class="badge danger">letzte Stufe erreicht</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p>Keine überfälligen Rechnungen. 🎉</p>{% endif %}
+  <p class="help">Stufen, Fristen, Gebühren und Texte: Einstellungen → Mahnwesen.</p>
+</section>
+
+{% if recent %}
+<section class="card">
+  <h2>Erstellte Mahnungen</h2>
+  <table class="table compact">
+    <thead><tr><th>Nr.</th><th>Datum</th><th>Stufe</th><th>Rechnung</th><th class="num">Gesamt</th><th>Frist</th><th>E-Mail</th></tr></thead>
+    {% for d in recent %}
+    <tr>
+      <td><a href="/mahnwesen/{{ d.id }}">{{ d.number }}</a></td><td>{{ d.dunning_date|datum }}</td><td>{{ d.level_name }}</td>
+      <td>{{ d.document.number }} · {{ d.document.recipient_name }}</td><td class="num">{{ d.total|geld }}</td>
+      <td>{{ d.pay_until|datum }}</td><td>{% if d.email_draft_at %}<span class="badge ok">Entwurf erstellt</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Zugriffsmatrix{% endblock %}
+{% block content %}
+<h1>Zugriffsmatrix</h1>
+<p class="intro">Alle Personen dieser Firma und ihre Rechte auf einen Blick. Je Bereich gibt es
+  <strong>kein Zugriff</strong>, <strong>lesen</strong> oder <strong>bearbeiten</strong>.
+  Inhaber haben immer alle Rechte. Rolle und Sperren ändern Sie unter „Rechte bearbeiten“ der jeweiligen Person.</p>
+{% if errors %}
+<div class="notice fehler">Nichts gespeichert – bitte korrigieren:
+  <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/benutzer/matrix" class="card">
+  {{ csrf_input }}
+  <div class="table-wrap">
+  <table class="table matrix">
+    <thead>
+      <tr>
+        <th class="sticky">Person</th>
+        <th>Rolle</th>
+        <th title="Zweites Passwort für Einstellungen, Benutzer, Datensicherung">Admin-Passwort</th>
+        {% for key, label in modules %}<th>{{ label }}</th>{% endfor %}
+        {% for key, label in extra_rights %}<th class="extra">{{ label }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in rows %}
+    {% set m = row.m %}
+    <tr{% if not m.is_active %} class="inactive"{% endif %}>
+      <th class="sticky" scope="row">
+        {{ m.user.name }}<br><span class="help">{{ m.user.email }}</span>
+        {% if not m.is_active %}<br><span class="badge danger">gesperrt</span>{% endif %}
+        {% if row.editable %}<input type="hidden" name="zeile_{{ m.id }}" value="1">{% endif %}
+      </th>
+      <td>{{ role_labels.get(m.role, m.role) }}</td>
+      <td class="center">{% if m.user.admin_password_hash %}<span class="badge ok">gesetzt</span>{% else %}<span class="badge">noch nicht</span>{% endif %}</td>
+      {% for key, label in modules %}
+        {% set level = 'bearbeiten' if row.owner else row.perms.get(key, 'keine') %}
+        <td class="center lvl-{{ level }}">
+        {% if row.editable %}
+          <select name="p_{{ m.id }}_{{ key }}" aria-label="{{ m.user.name }}: {{ label }}">
+            {% for l in levels %}<option value="{{ l }}" {% if l == level %}selected{% endif %}>{{ level_labels[l] }}</option>{% endfor %}
+          </select>
+        {% else %}
+          {{ level_labels[level] }}
+        {% endif %}
+        </td>
+      {% endfor %}
+      {% for key, label in extra_rights %}
+        {% set on = row.owner or key in row.extras %}
+        <td class="center lvl-{{ 'bearbeiten' if on else 'keine' }}">
+        {% if row.editable %}
+          <input type="checkbox" name="x_{{ m.id }}" value="{{ key }}" aria-label="{{ m.user.name }}: {{ label }}" {% if on %}checked{% endif %}>
+        {% else %}
+          {{ 'ja' if on else 'nein' }}
+        {% endif %}
+        </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="help">Farben: grün = bearbeiten, blau = lesen, grau = kein Zugriff (zeigt den gespeicherten Stand).
+    Niemand kann mehr Rechte vergeben, als er selbst hat. Jede Änderung steht im Änderungsprotokoll.</p>
+  <div class="actions">
+    <a class="btn secondary" href="/benutzer">Zurück</a>
+    {% if can_edit %}<button type="submit" class="btn primary">Speichern</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

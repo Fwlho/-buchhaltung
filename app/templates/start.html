@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Übersicht{% endblock %}
+{% block content %}
+<h1>Übersicht – {{ values.get('firma.name') or ctx.tenant.name }}</h1>
+{% if missing %}
+<div class="notice hinweis">Es fehlen noch Pflichtangaben in den Einstellungen: {{ missing|join(', ') }}.
+  {% if ctx.can('einstellungen', edit=True) %}<a href="/einstellungen">Jetzt ergänzen</a>{% endif %}</div>
+{% endif %}
+{% if pending %}
+<div class="notice hinweis">Im Prüfbereich warten <strong>{{ pending }}</strong> Beleg(e) auf Prüfung.
+  <a href="/pruefbereich">Jetzt prüfen</a></div>
+{% endif %}
+{% if contract_drafts %}
+<div class="notice hinweis"><strong>{{ contract_drafts }}</strong> neue(r) Rechnungsentwurf/-entwürfe aus Verträgen –
+  bitte prüfen und festschreiben. <a href="/rechnungen?status=entwurf">Zu den Entwürfen</a></div>
+{% endif %}
+
+{% if euer %}
+{% set action = '/' %}
+{% include "_zeitraum.html" %}
+{% if period_error %}<div class="notice fehler">{{ period_error }}</div>{% endif %}
+<div class="tiles">
+  <section class="card tile kpi">
+    <h2>Einnahmen <small>{{ period.label }}</small></h2>
+    <p class="big">{{ euer.income_net|geld }}</p>
+    <p class="help">netto · brutto {{ euer.income_total|geld }} · nach Zahlungseingang</p>
+  </section>
+  <section class="card tile kpi">
+    <h2>Ausgaben <small>{{ period.label }}</small></h2>
+    <p class="big">{{ euer.expense_net|geld }}</p>
+    <p class="help">netto · brutto {{ euer.expense_total|geld }} · nach Zahlung</p>
+  </section>
+  <section class="card tile kpi">
+    <h2>{{ 'Überschuss' if euer.surplus >= 0 else 'Verlust' }} <small>{{ period.label }}</small></h2>
+    <p class="big {{ 'neg' if euer.surplus < 0 else '' }}">{{ (euer.income_net - euer.expense_net)|geld }}</p>
+    <p class="help">netto · inkl. Umsatzsteuer {{ euer.surplus|geld }} · <a href="/euer?{{ q }}">zur EÜR</a></p>
+  </section>
+</div>
+{% endif %}
+
+<div class="tiles">
+  {% if open %}
+  {% if ctx.can('rechnungen_ausgang') %}
+  <section class="card tile kpi">
+    <h2>Offene Forderungen</h2>
+    <p class="big">{{ open.receivables|geld }}</p>
+    <p class="help">{{ open.receivables_count }} Rechnung(en) offen
+      {% if open.overdue_count %}· <span class="neg">{{ open.overdue_count }} überfällig ({{ open.overdue|geld }})</span>{% endif %}</p>
+    {% if open.overdue_docs %}
+    <ul class="help compact-list">{% for d in open.overdue_docs %}
+      <li><a href="/rechnungen/{{ d.id }}">{{ d.number }}</a> {{ d.recipient_name }} – fällig {{ d.due_date|datum }}</li>{% endfor %}</ul>
+    <a class="help" href="/rechnungen?ueberfaellig=1">alle überfälligen anzeigen</a>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if ctx.can('rechnungen_eingang') %}
+  <section class="card tile kpi">
+    <h2>Offene Verbindlichkeiten</h2>
+    <p class="big">{{ open.payables|geld }}</p>
+    <p class="help">{{ open.payables_count }} Eingangsrechnung(en) offen
+      {% if open.overdue_payables_count %}· <span class="neg">{{ open.overdue_payables_count }} überfällig</span>{% endif %}</p>
+    <a class="help" href="/eingangsrechnungen?status=offen">anzeigen</a>
+  </section>
+  {% endif %}
+  {% endif %}
+  {% if vat %}
+  <section class="card tile kpi">
+    <h2>Umsatzsteuer <small>{{ vat.period.label }}</small></h2>
+    <p class="big {{ 'neg' if vat.payable < 0 else '' }}">{{ vat.payable|geld }}</p>
+    <p class="help">{{ 'Zahllast' if vat.payable >= 0 else 'Erstattung' }} im laufenden Voranmeldungszeitraum
+      · <a href="/steuern">Details</a></p>
+  </section>
+  {% elif ku %}
+  <section class="card tile kpi">
+    <h2>Kleinunternehmer-Grenze {{ ku.year }}</h2>
+    <p class="big">{{ ku.current|geld }}</p>
+    <div class="meter" role="img" aria-label="{{ ku.pct_current }} % von 25.000 €"><span style="width: {{ ku.pct_current }}%"></span></div>
+    <p class="help {{ 'neg' if ku.level == 'fehler' else '' }}">{{ ku.text }}</p>
+  </section>
+  {% endif %}
+  {% if open_quotes is defined %}
+  <section class="card tile kpi">
+    <h2>Offene Angebote</h2>
+    <p class="big">{{ open_quotes }}</p>
+    <p class="help">Entwürfe und versendete Angebote · <a href="/angebote">anzeigen</a></p>
+  </section>
+  {% endif %}
+</div>
+
+{% if chart %}
+<section class="card chart">
+  <h2>Monatsverlauf {{ period.year }} <small>brutto, nach Zahlungsdatum</small></h2>
+  {% if chart.empty %}
+  <p class="help">Noch keine Zahlungen in diesem Jahr.</p>
+  {% else %}
+  <svg viewBox="0 0 720 {{ chart.height + 30 }}" role="img" aria-label="Einnahmen und Ausgaben je Monat">
+    <line x1="0" y1="{{ chart.height }}" x2="720" y2="{{ chart.height }}" stroke="var(--border-strong)"/>
+    {% for b in chart.bars %}{% set x = loop.index0 * 60 + 8 %}
+    <rect x="{{ x }}" y="{{ chart.height - b.h_income }}" width="20" height="{{ b.h_income }}" fill="var(--accent)"><title>{{ b.label }}: Einnahmen {{ b.income|geld }}</title></rect>
+    <rect x="{{ x + 22 }}" y="{{ chart.height - b.h_expense }}" width="20" height="{{ b.h_expense }}" fill="var(--chart-expense)"><title>{{ b.label }}: Ausgaben {{ b.expense|geld }}</title></rect>
+    <text x="{{ x + 21 }}" y="{{ chart.height + 18 }}" text-anchor="middle" font-size="12" fill="var(--muted)">{{ b.label }}</text>
+    {% endfor %}
+  </svg>
+  <div class="legend"><span><i style="background: var(--accent)"></i>Einnahmen</span><span><i style="background: var(--chart-expense)"></i>Ausgaben</span></div>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="tiles">
+  <section class="card tile">
+    <h2>Ihre Firma</h2>
+    <p>{{ values.get('firma.name') }}<br>
+       {{ values.get('firma.strasse') or '' }}<br>
+       {{ values.get('firma.plz') or '' }} {{ values.get('firma.ort') or '' }}</p>
+    <p class="help">
+      {% if values.get('steuer.kleinunternehmer') %}Kleinunternehmer (§ 19 UStG){% else %}Regelbesteuerung{% endif %},
+      {{ 'Ist' if values.get('steuer.versteuerung') == 'ist' else 'Soll' }}-Versteuerung,
+      Kontenrahmen {{ values.get('konten.rahmen') }}
+    </p>
+  </section>
+  <section class="card tile">
+    <h2>Ihre Rolle</h2>
+    <p>{{ {'inhaber':'Inhaber','buchhaltung':'Buchhaltung','mitarbeiter':'Mitarbeiter','steuerberater':'Steuerberater'}.get(ctx.role, ctx.role) }}</p>
+    <p class="help">Angemeldet als {{ ctx.user.email }}</p>
+  </section>
+</div>
+{% endblock %}

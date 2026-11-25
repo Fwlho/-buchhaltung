@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_bezahlt.html" import paid_box, paid_forms with context %}
+{% block title %}Eingangsrechnungen{% endblock %}
+{% block content %}
+<h1>Eingangsrechnungen</h1>
+{% if pending %}
+<div class="notice hinweis">Im Prüfbereich warten {{ pending }} Beleg(e) auf Prüfung. <a href="/pruefbereich">Zum Prüfbereich</a></div>
+{% endif %}
+<form method="get" action="/eingangsrechnungen" class="searchbar">
+  <label class="sr-only" for="q">Suchen</label>
+  <input type="search" id="q" name="q" value="{{ q }}" placeholder="Absender oder Rechnungsnummer …">
+  <select name="status" class="compact" aria-label="Status">
+    <option value="">alle Status</option>
+    {% for s in ['offen', 'bezahlt', 'storniert'] %}<option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="jahr" class="compact" aria-label="Jahr">
+    <option value="">alle Jahre</option>
+    {% for y in years %}<option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+  </select>
+  <label class="inline-check"><input type="checkbox" name="pruefen" value="1" {% if review %}checked{% endif %}> nur „bitte prüfen“</label>
+  <button type="submit" class="btn secondary">Filtern</button>
+  <span class="spacer"></span>
+  {% if can_edit %}<a class="btn primary" href="/eingangsrechnungen/hochladen">Belege hochladen</a>{% endif %}
+</form>
+
+<form method="post" action="/eingangsrechnungen/auswahl" target="_blank" id="auswahl">
+  {{ csrf_input }}
+  <section class="card">
+    {% if docs %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th><span class="sr-only">Auswahl</span></th><th>Datum</th><th>Absender</th><th>Rechnungsnr.</th><th>Konto</th>
+        <th class="num">Brutto</th><th class="num">Offen</th><th>Fällig</th><th>Status</th><th>Zustand</th><th>Bezahlt</th>
+      </tr></thead>
+      <tbody>
+      {% for d in docs %}
+      <tr class="{% if d.status == 'storniert' %}cancelled{% endif %}">
+        <td><input type="checkbox" name="ids" value="{{ d.id }}" aria-label="Beleg {{ d.number or d.id }} auswählen"></td>
+        <td class="nowrap">{{ d.doc_date|datum }}</td>
+        <td><a href="/eingangsrechnungen/{{ d.id }}">{{ d.partner_name or '(ohne Absender)' }}</a>
+          {% if d.id in dup_ids %}<span class="badge danger">doppelt?</span>{% endif %}
+          {% if d.needs_review %}<span class="badge warn">bitte prüfen</span>{% endif %}</td>
+        <td>{{ d.number or '' }}</td>
+        <td class="help">{{ account_label(chart, d.account) }}</td>
+        <td class="num nowrap">{{ d.gross_total|geld }}</td>
+        <td class="num nowrap">{% if d.open_amount > 0 %}{{ d.open_amount|geld }}{% endif %}</td>
+        <td class="nowrap {% if d.status == 'offen' and d.due_date and d.due_date < today_date %}overdue{% endif %}">{{ d.due_date|datum }}</td>
+        <td><span class="badge {{ {'bezahlt': 'ok', 'storniert': 'danger'}.get(d.status, '') }}">{{ d.status_label }}</span></td>
+        <td>{{ 'festgeschrieben' if d.is_final else 'Entwurf' }}</td>
+        <td class="nowrap">{{ paid_box(d, list_url, '/eingangsrechnungen') }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot><tr>
+        <td colspan="5"><strong>Summe ({{ docs|length }} Belege, ohne stornierte)</strong></td>
+        <td class="num nowrap"><strong>{{ sums.gross|geld }}</strong></td>
+        <td class="num nowrap"><strong>{{ sums.open|geld }}</strong></td>
+        <td colspan="4"></td>
+      </tr></tfoot>
+    </table>
+    </div>
+    <div class="row">
+      <span class="help">Ausgewählte:</span>
+      <button type="submit" name="aktion" value="drucken" class="btn small secondary">Drucken (PDF)</button>
+      <button type="submit" name="aktion" value="zip" class="btn small secondary">Als ZIP herunterladen</button>
+      {% if can_edit %}<button type="submit" name="aktion" value="duplizieren" formtarget="_self" class="btn small secondary">Duplizieren</button>{% endif %}
+    </div>
+    {% else %}
+    <p>{% if q or status or year or review %}Keine Belege für diese Auswahl.{% else %}Noch keine Eingangsrechnungen. Laden Sie Belege hoch und übernehmen Sie sie im Prüfbereich.{% endif %}</p>
+    {% endif %}
+  </section>
+</form>
+{# Formulare für die Häkchen – außerhalb der Auswahl-Liste, weil Formulare nicht ineinander liegen dürfen #}
+{% for d in docs %}{{ paid_forms(d, list_url, '/eingangsrechnungen') }}{% endfor %}
+{% endblock %}

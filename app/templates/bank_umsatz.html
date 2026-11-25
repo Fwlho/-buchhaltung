@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Umsatz {{ tx.booking_date|datum }}{% endblock %}
+{% block content %}
+<p><a href="/bank">← Bankabgleich</a></p>
+<h1>{{ 'Geldeingang' if tx.amount > 0 else 'Geldausgang' }} <small>{{ tx.amount|geld }} am {{ tx.booking_date|datum }}</small></h1>
+{% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <table class="table compact">
+    <tr><td>{{ 'Auftraggeber' if tx.amount > 0 else 'Empfänger' }}</td><td>{{ tx.name or '–' }}{% if tx.iban %}<br><span class="help">{{ tx.iban }}</span>{% endif %}</td></tr>
+    <tr><td>Verwendungszweck</td><td class="prewrap">{{ tx.purpose or '–' }}</td></tr>
+    {% if tx.value_date %}<tr><td>Wertstellung</td><td>{{ tx.value_date|datum }}</td></tr>{% endif %}
+    <tr><td>Status</td><td>
+      {% if tx.category %}<span class="badge">{{ tx.category_label }}</span>
+      {% elif tx.remaining > 0 %}<span class="badge">offen</span> – noch frei: <strong>{{ tx.remaining|geld }}</strong>
+      {% else %}<span class="badge ok">zugeordnet</span>{% endif %}
+    </td></tr>
+  </table>
+  {% if payments %}
+  <h3>Zugeordnete Zahlungen</h3>
+  <table class="table compact">
+    {% for p, d in payments %}
+    <tr><td><a href="{{ '/rechnungen/' if d.direction == 'ausgang' else '/eingangsrechnungen/' }}{{ d.id }}">{{ d.number or 'Beleg' }}</a> – {{ d.partner_name or d.recipient_name }}</td>
+      <td class="num">{{ p.amount|geld }}{% if p.skonto %} <span class="help">+ {{ p.skonto|geld }} Skonto</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  {% if can_edit and (tx.category or (payments and can_reset_payments)) %}
+  <form method="post" action="/bank/umsatz/{{ tx.id }}/aufheben">{{ csrf_input }}
+    <button type="submit" class="btn small secondary">{{ 'Markierung aufheben' if tx.category else 'Zuordnung aufheben (Zahlungen löschen)' }}</button>
+  </form>
+  {% endif %}
+</section>
+
+{% if can_edit and tx.remaining > 0 %}
+<section class="card">
+  <h2>Rechnung zuordnen</h2>
+  {% if suggestions %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Vorschlag</th><th>Partner</th><th class="num">offen</th><th>Warum?</th><th></th></tr></thead>
+    {% for s in suggestions %}
+    <tr>
+      <td class="nowrap">{{ s.doc.number or 'ohne Nr.' }} <span class="help">{{ s.doc.doc_date|datum }}</span></td>
+      <td>{{ s.doc.partner_name or s.doc.recipient_name }}</td>
+      <td class="num nowrap">{% if s.doc.status == 'bezahlt' %}bezahlt{% else %}{{ s.doc.open_amount|geld }}{% endif %}</td>
+      <td class="help">{{ s.reasons|join(', ') }}</td>
+      <td>
+        <form method="post" action="/bank/umsatz/{{ tx.id }}/zuordnen" class="inline">{{ csrf_input }}
+          <input type="hidden" name="beleg" value="{{ s.doc.id }}">
+          <input type="hidden" name="betrag" value="{{ s.amount|zahl }}">
+          {% if s.skonto %}<input type="hidden" name="mit_skonto" value="1">{% endif %}
+          <button type="submit" class="btn small {{ 'primary' if loop.first else 'secondary' }}">{{ s.amount|geld }} zuordnen{% if s.skonto %} (mit Skonto){% endif %}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  {% else %}<p class="help">Kein passender Vorschlag gefunden.</p>{% endif %}
+
+  {% if docs %}
+  <h3>Andere Rechnung wählen</h3>
+  <form method="post" action="/bank/umsatz/{{ tx.id }}/zuordnen" class="row">
+    {{ csrf_input }}
+    <label class="sr-only" for="beleg">Rechnung</label>
+    <select id="beleg" name="beleg" required>
+      <option value="">– Rechnung auswählen –</option>
+      {% for d in docs %}<option value="{{ d.id }}">{{ d.number or 'ohne Nr.' }} · {{ d.partner_name or d.recipient_name }} · {% if d.status == 'bezahlt' %}bezahlt ohne Bankbeleg ({{ d.gross_total|geld }}){% else %}offen {{ d.open_amount|geld }}{% endif %}</option>{% endfor %}
+    </select>
+    <label for="betrag">Betrag</label>
+    <input type="text" id="betrag" name="betrag" value="{{ tx.remaining|zahl }}" class="short">
+    {% if tx.amount < 0 %}<label class="inline-check"><input type="checkbox" name="mit_skonto" value="1"> Skonto abziehen</label>{% endif %}
+    <button type="submit" class="btn secondary">Zuordnen</button>
+  </form>
+  <p class="help">Teilzahlung: kleineren Betrag eintragen. Sammelüberweisung: nacheinander mehreren Rechnungen zuordnen.</p>
+  {% else %}<p class="help">Es gibt keine offenen {{ 'Ausgangs' if tx.amount > 0 else 'Eingangs' }}rechnungen.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Ohne Rechnung</h2>
+  <form method="post" action="/bank/umsatz/{{ tx.id }}/markieren" class="row">
+    {{ csrf_input }}
+    {% for key, label in categories.items() %}
+    <button type="submit" name="kategorie" value="{{ key }}" class="btn small secondary">{{ label }}</button>
+    {% endfor %}
+  </form>
+  <p class="help">Umsatzsteuer-Zahlungen an das bzw. Erstattungen vom Finanzamt erscheinen dann in der EÜR.</p>
+</section>
+{% endif %}
+{% endblock %}

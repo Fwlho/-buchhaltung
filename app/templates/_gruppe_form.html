@@ -1,0 +1,81 @@
+{# Gemeinsames Formular einer Einstellungs-Gruppe für Assistent und Einstellungen.
+   Erwartet: group, values, errors, secrets_present, logo, examples, action, submit_label, disabled,
+   back_url (Rücksprung nach Logo-Upload), prev_url (optional, Zurück-Knopf) #}
+{% from "_macros.html" import form_field %}
+<p class="intro">{{ group.intro }}</p>
+
+{% if group.key == 'design' and vorlagen is defined %}
+<section class="card logo-box">
+  <h3>PDF-Vorlagen vergleichen</h3>
+  <p class="help">Zeigt ein Muster mit Ihren Firmendaten (Logo, Farbe, Bankverbindung) und Beispiel-Positionen.
+    Welche Vorlage verwendet wird, legen Sie unten bei „PDF-Vorlage …“ fest. Logo, Farbe und Texte bitte vorher speichern.</p>
+  <ul class="help">
+    {% for v in vorlagen %}<li><strong>{{ v.name }}:</strong> {{ v.beschreibung }}</li>{% endfor %}
+  </ul>
+  <form method="get" action="/einstellungen/design/muster" target="_blank" class="row">
+    <select name="art" aria-label="Belegart">
+      {% for key, label in vorlage_arten.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+    </select>
+    <select name="vorlage" aria-label="Vorlage">
+      {% for v in vorlagen %}<option value="{{ v.key }}">{{ v.name }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn secondary">Muster ansehen</button>
+  </form>
+</section>
+{% endif %}
+
+{% if group.key == 'design' %}
+<section class="card logo-box">
+  <h3>Logo</h3>
+  {% if logo %}
+    <img src="/dateien/logo" alt="Ihr Logo" class="logo-preview">
+    <p class="help">{{ logo.original_name }}</p>
+  {% else %}
+    <p class="help">Noch kein Logo hinterlegt.</p>
+  {% endif %}
+  {% if errors.logo %}<div class="notice fehler">{{ errors.logo }}</div>{% endif %}
+  {% if not disabled %}
+  {# Die Datei gehört zum Einstellungs-Formular unten: „Logo hochladen“ und „Speichern“ übernehmen sie beide #}
+  <div class="row">
+    <input type="file" name="datei" accept="image/png,image/jpeg" form="einstellungen-formular" aria-label="Logo-Datei">
+    <button type="submit" class="btn secondary" form="einstellungen-formular">Logo hochladen</button>
+  </div>
+  <p class="help">PNG oder JPG, höchstens 5 MB.</p>
+  {% if logo %}
+  <form method="post" action="/einstellungen/logo/entfernen" class="row">
+    {{ csrf_input }}
+    <input type="hidden" name="zurueck" value="{{ back_url }}">
+    <button type="submit" class="btn small danger">Logo entfernen</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<form method="post" action="{{ action }}" class="settings-form" id="einstellungen-formular" novalidate
+      {%- if group.key == 'design' %} enctype="multipart/form-data"{% endif %}>
+  {{ csrf_input }}
+  {% if errors and not errors.logo %}<div class="notice fehler">Bitte die markierten Felder prüfen.</div>{% endif %}
+  <div class="grid">
+    {% for f in group.fields %}
+      {{ form_field(f, values, errors, secrets_present, disabled) }}
+    {% endfor %}
+  </div>
+  {% if group.key == 'nummern' and examples %}
+  <div class="card examples">
+    <strong>So sehen die ersten Nummern in diesem Jahr aus:</strong>
+    {% set labels = {'rechnung': 'Rechnung', 'angebot': 'Angebot', 'mahnung': 'Mahnung', 'storno': 'Stornorechnung'} %}
+    <ul>
+      {% for typ, example in examples.items() %}
+        <li>{{ labels.get(typ, typ) }}: <code>{{ example }}</code></li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if not disabled %}
+  <div class="actions">
+    {% if prev_url %}<a class="btn secondary" href="{{ prev_url }}">Zurück</a>{% endif %}
+    <button type="submit" class="btn primary">{{ submit_label }}</button>
+  </div>
+  {% endif %}
+</form>

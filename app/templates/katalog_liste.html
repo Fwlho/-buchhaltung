@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Katalog{% endblock %}
+{% block content %}
+<h1>Artikel- und Leistungskatalog{% if archived %} – Archiv{% endif %}</h1>
+{% set base_url = '/katalog' %}{% set new_url = '/katalog/neu' if can_edit else None %}{% set new_label = 'Neuer Eintrag' %}
+{% include "_suche.html" %}
+<section class="card">
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr>
+      <th>Nr.</th><th>Bezeichnung</th><th>Art</th><th>Einheit</th><th>Abrechnung</th>
+      <th class="num">Preis netto</th><th class="num">USt</th>
+      {% if show_costs %}<th class="num">Kosten</th><th class="num">Marge</th>{% endif %}
+    </tr></thead>
+    <tbody>
+    {% for i in rows %}
+    <tr>
+      <td class="nowrap">{{ i.number or '' }}</td>
+      <td><a href="/katalog/{{ i.id }}"><strong>{{ i.title }}</strong></a>
+        {% if i.description %}<div class="help">{{ i.description|truncate(90) }}</div>{% endif %}</td>
+      <td>{{ i.kind_label }}</td>
+      <td>{{ i.unit }}</td>
+      <td>{{ i.billing_label }}</td>
+      <td class="num nowrap">{{ i.price_net|preis }} €</td>
+      <td class="num nowrap">{{ i.vat_rate|prozent }}</td>
+      {% if show_costs %}
+      <td class="num nowrap">{% if i.cost_rate is not none %}{{ i.cost_rate|preis }} €{% endif %}</td>
+      <td class="num nowrap">{% if i.cost_rate is not none and i.price_net > 0 %}{{ ((i.price_net - i.cost_rate) / i.price_net * 100)|zahl(1) }} %{% endif %}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if more %}<p class="help">Es werden die ersten 200 Treffer angezeigt – bitte die Suche eingrenzen.</p>{% endif %}
+  {% else %}
+  <p>{% if q %}Keine Treffer für „{{ q }}“.{% elif archived %}Keine archivierten Einträge.{% else %}Noch keine Einträge angelegt.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}

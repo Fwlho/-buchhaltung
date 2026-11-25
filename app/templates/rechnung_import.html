@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Alte Rechnung prüfen{% endblock %}
+{% block mainclass %}page wide{% endblock %}
+{% block content %}
+{% set unsure = doc.review_fields or [] %}
+{% if step_total %}
+<nav class="step-arrows" aria-label="Zwischen den Belegen im Prüfbereich wechseln">
+  {% if step_prev %}<a class="step-arrow left" href="{{ step_prev }}" title="Vorheriger Beleg (nicht gespeicherte Eingaben gehen verloren)" aria-label="Vorheriger Beleg">‹</a>{% endif %}
+  {% if step_next %}<a class="step-arrow right" href="{{ step_next }}" title="Nächster Beleg (nicht gespeicherte Eingaben gehen verloren)" aria-label="Nächster Beleg">›</a>{% endif %}
+</nav>
+{% endif %}
+<p><a href="/rechnungen/import">← Alte Rechnungen hochladen</a>{% if step_total %} <small class="help">Beleg {{ step_pos }} von {{ step_total }}</small>{% endif %}</p>
+<h1>{{ doc.recipient_name or 'Hochgeladene Rechnung' }}{% if doc.number %} <small>Rechnung {{ doc.number }}</small>{% endif %}
+  <span class="badge warn">noch nicht übernommen</span></h1>
+<div class="notice hinweis">Bitte die Angaben mit dem Original links vergleichen. Gelb markierte Felder hat das Programm
+  nicht sicher erkannt. Mit „Übernehmen“ wird die Rechnung festgeschrieben und zählt in den Auswertungen.</div>
+
+<div class="split">
+  <section class="card preview">
+    <iframe src="/rechnungen/import/{{ doc.id }}/datei" title="Original-Rechnung"></iframe>
+    <p class="help"><a href="/rechnungen/import/{{ doc.id }}/datei" target="_blank" rel="noopener">{{ doc.file.original_name }} in neuem Fenster öffnen</a></p>
+  </section>
+
+  <div>
+    <form method="post" action="/rechnungen/import/{{ doc.id }}" class="card" novalidate>
+      {{ csrf_input }}
+      {% if errors %}<div class="notice fehler">Bitte die markierten Angaben prüfen.</div>{% endif %}
+      <fieldset {% if not can_edit %}disabled{% endif %}>
+      <div class="grid">
+        <div class="field {% if 'number' in unsure %}unsure{% endif %} {% if errors.number %}has-error{% endif %}">
+          <label for="number">Rechnungsnummer</label>
+          <input type="text" id="number" name="number" value="{{ v.number }}">
+          {% if errors.number %}<p class="error">{{ errors.number }}</p>{% endif %}
+        </div>
+        <div class="field {% if 'doc_date' in unsure %}unsure{% endif %} {% if errors.doc_date %}has-error{% endif %}">
+          <label for="doc_date">Rechnungsdatum</label>
+          <input type="text" id="doc_date" name="doc_date" value="{{ v.doc_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.doc_date %}<p class="error">{{ errors.doc_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.service_date %}has-error{% endif %}">
+          <label for="service_date">Leistungsdatum (leer = Rechnungsdatum)</label>
+          <input type="text" id="service_date" name="service_date" value="{{ v.service_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.service_date %}<p class="error">{{ errors.service_date }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.due_date %}has-error{% endif %}">
+          <label for="due_date">Fällig am</label>
+          <input type="text" id="due_date" name="due_date" value="{{ v.due_date }}" placeholder="TT.MM.JJJJ">
+          {% if errors.due_date %}<p class="error">{{ errors.due_date }}</p>{% endif %}
+        </div>
+        <div class="field wide {% if 'customer' in unsure %}unsure{% endif %} {% if errors.customer_id %}has-error{% endif %}">
+          <label for="customer_id">Kunde (Stammdaten)</label>
+          <select id="customer_id" name="customer_id">
+            <option value="">– nicht zugeordnet –</option>
+            {% for c in customers %}<option value="{{ c.id }}" {% if v.customer_id == c.id|string %}selected{% endif %}>{{ c.number }} {{ c.name }}</option>{% endfor %}
+          </select>
+          <p class="help">Mit Kunde zählt die Rechnung in dessen Übersicht und im DATEV-Export unter seiner Kundennummer.
+            Name und Anschrift werden aus den Stammdaten ergänzt, wenn die Felder leer sind.</p>
+          {% if errors.customer_id %}<p class="error">{{ errors.customer_id }}</p>{% endif %}
+        </div>
+        <div class="field {% if 'partner' in unsure %}unsure{% endif %} {% if errors.recipient_name %}has-error{% endif %}">
+          <label for="recipient_name">Kunde (Name wie auf der Rechnung)</label>
+          <input type="text" id="recipient_name" name="recipient_name" value="{{ v.recipient_name }}">
+          {% if errors.recipient_name %}<p class="error">{{ errors.recipient_name }}</p>{% endif %}
+        </div>
+        <div class="field {% if errors.recipient_address %}has-error{% endif %}">
+          <label for="recipient_address">Anschrift</label>
+          <textarea id="recipient_address" name="recipient_address" rows="3">{{ v.recipient_address }}</textarea>
+          {% if errors.recipient_address %}<p class="error">{{ errors.recipient_address }}</p>{% endif %}
+        </div>
+      </div>
+
+      <h2 class="{% if 'lines' in unsure or 'gross' in unsure %}unsure-title{% endif %}">Beträge
+        <small>je Steuersatz – zwei Werte genügen, der Rest wird berechnet</small></h2>
+      {% if errors['zeile-0'] and not rows %}<p class="error">{{ errors['zeile-0'] }}</p>{% endif %}
+      <div class="table-wrap">
+      <table class="table amounts">
+        <thead><tr><th>USt-Satz</th><th class="num">Netto</th><th class="num">USt</th><th class="num">Brutto</th></tr></thead>
+        <tbody>
+        {% for r in rows %}{% set i = loop.index0 %}
+        <tr class="{% if errors['zeile-' ~ i] %}has-error{% endif %}">
+          <td><select name="zeile-{{ i }}-satz" aria-label="Steuersatz Zeile {{ i + 1 }}">
+            {% for rate in vat_rates %}<option value="{{ rate }}" {% if r.satz == rate %}selected{% endif %}>{{ rate }} %</option>{% endfor %}
+            {% if r.satz and r.satz not in vat_rates %}<option value="{{ r.satz }}" selected>{{ r.satz }} %</option>{% endif %}
+          </select></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-netto" value="{{ r.netto }}" aria-label="Netto Zeile {{ i + 1 }}"></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-ust" value="{{ r.ust }}" aria-label="USt Zeile {{ i + 1 }}"></td>
+          <td><input type="text" class="num" inputmode="decimal" name="zeile-{{ i }}-brutto" value="{{ r.brutto }}" aria-label="Brutto Zeile {{ i + 1 }}"></td>
+        </tr>
+        {% if errors['zeile-' ~ i] %}<tr><td colspan="4"><p class="error">{{ errors['zeile-' ~ i] }}</p></td></tr>{% endif %}
+        {% endfor %}
+        </tbody>
+        <tfoot><tr><th>Summe</th><th class="num">{{ doc.net_total|geld }}</th><th class="num">{{ doc.vat_total|geld }}</th><th class="num">{{ doc.gross_total|geld }}</th></tr></tfoot>
+      </table>
+      </div>
+
+      <div class="grid">
+        <div class="field {% if errors.paid_on %}has-error{% endif %}">
+          <label for="paid_on">Bezahlt am (leer = noch offen)</label>
+          <input type="text" id="paid_on" name="paid_on" value="{{ v.paid_on }}" placeholder="TT.MM.JJJJ">
+          <p class="help">Wird beim Übernehmen als Zahlung über den vollen Betrag gebucht. Teilzahlungen danach auf der
+            Rechnungsseite erfassen.</p>
+          {% if errors.paid_on %}<p class="error">{{ errors.paid_on }}</p>{% endif %}
+        </div>
+        <div class="field wide">
+          <label for="notes">Notiz</label>
+          <textarea id="notes" name="notes" rows="2">{{ v.notes }}</textarea>
+        </div>
+      </div>
+      </fieldset>
+      {% if can_edit %}
+      <div class="actions">
+        <button type="submit" name="aktion" value="speichern" class="btn secondary">Speichern</button>
+        {% if can_finalize %}
+        <button type="submit" name="aktion" value="uebernehmen" class="btn primary">Übernehmen (festschreiben)</button>
+        {% else %}<span class="help">Übernehmen darf nur, wer das Sonderrecht „Festschreiben“ hat.</span>{% endif %}
+      </div>
+      {% endif %}
+    </form>
+    {% if can_edit %}
+    <form method="post" action="/rechnungen/import/{{ doc.id }}/verwerfen" class="row">
+      {{ csrf_input }}
+      <button type="submit" class="btn small danger">Hochgeladene Rechnung verwerfen</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

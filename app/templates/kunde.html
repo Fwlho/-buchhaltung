@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% from "_macros.html" import form_field %}
+{% block title %}Kunde {{ c.number }} – {{ c.name }}{% endblock %}
+{% block content %}
+<p><a href="/kunden">← Alle Kunden</a></p>
+<h1>{{ c.name }} <small>Kunde {{ c.number }}</small>
+  {% if not c.is_active %}<span class="badge danger">archiviert</span>{% endif %}
+</h1>
+{% if can_edit %}
+<div class="row toolbar">
+  <a class="btn primary" href="/kunden/{{ c.id }}/bearbeiten">Bearbeiten</a>
+  <form method="post" action="/kunden/{{ c.id }}/archivieren" class="inline">
+    {{ csrf_input }}
+    {% if c.is_active %}
+      <input type="hidden" name="aktiv" value="0"><button type="submit" class="btn secondary">Archivieren</button>
+    {% else %}
+      <input type="hidden" name="aktiv" value="1"><button type="submit" class="btn secondary">Wieder aktivieren</button>
+    {% endif %}
+  </form>
+</div>
+{% endif %}
+
+<div class="tiles">
+  <section class="card tile">
+    <h2>Adresse</h2>
+    <p>{{ c.name }}<br>
+      {% if c.contact_person %}{{ c.contact_person }}<br>{% endif %}
+      {{ c.street or '' }}<br>{{ c.zip or '' }} {{ c.city or '' }}
+      {% if c.country and c.country != 'Deutschland' %}<br>{{ c.country }}{% endif %}</p>
+    <p class="help">{{ c.kind_label }}</p>
+  </section>
+  <section class="card tile">
+    <h2>Kontakt</h2>
+    <p>{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a><br>{% endif %}
+       {{ c.phone or '' }}</p>
+    {% if not c.email and not c.phone %}<p class="help">Keine Kontaktdaten hinterlegt.</p>{% endif %}
+  </section>
+  <section class="card tile">
+    <h2>Rechnungsangaben</h2>
+    <p>
+      Zahlungsziel: {{ c.payment_terms_days if c.payment_terms_days is not none else default_terms }} Tage
+      {% if c.payment_terms_days is none %}<span class="help">(Standard)</span>{% endif %}<br>
+      {% if c.ust_id %}USt-IdNr.: {{ c.ust_id }}<br>{% endif %}
+      {% if c.leitweg_id %}Leitweg-ID: {{ c.leitweg_id }}<br>{% endif %}
+    </p>
+    {% if c.has_billing_address %}
+    <p><strong>Rechnungen an:</strong><br>
+      {{ c.billing_name or c.name }}<br>{{ c.billing_street }}<br>{{ c.billing_zip }} {{ c.billing_city }}
+      {% if c.billing_country and c.billing_country != 'Deutschland' %}<br>{{ c.billing_country }}{% endif %}</p>
+    {% endif %}
+  </section>
+</div>
+
+{% if c.notes %}
+<section class="card">
+  <h2>Notizen</h2>
+  <p class="prewrap">{{ c.notes }}</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Objekt- / Leistungsadressen</h2>
+  {% set active_addresses = c.addresses|selectattr('is_active')|list %}
+  {% set archived_addresses = c.addresses|rejectattr('is_active')|list %}
+  {% if active_addresses %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Bezeichnung</th><th>Adresse</th><th>Hinweis</th><th></th></tr></thead>
+    <tbody>
+    {% for a in active_addresses %}
+    <tr>
+      <td>{{ a.label }}</td>
+      <td>{{ a.street }}, {{ a.zip }} {{ a.city }}</td>
+      <td class="help">{{ a.note or '' }}</td>
+      <td>{% if can_edit %}<a class="btn small secondary" href="/kunden/{{ c.id }}/adressen/{{ a.id }}">Bearbeiten</a>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="help">Noch keine Objektadressen. Sie werden später bei Angeboten und Rechnungen als Leistungsort angeboten.</p>
+  {% endif %}
+  {% if archived_addresses %}
+  <details class="help"><summary>{{ archived_addresses|length }} archivierte Adresse(n)</summary>
+    <ul>{% for a in archived_addresses %}<li>{{ a.label }} – {{ a.street }}, {{ a.zip }} {{ a.city }}
+      {% if can_edit %}<a href="/kunden/{{ c.id }}/adressen/{{ a.id }}">ansehen</a>{% endif %}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+
+  {% if can_edit %}
+  <details {% if address_errors %}open{% endif %} class="add-box">
+    <summary class="btn secondary">Objektadresse hinzufügen</summary>
+    <form method="post" action="/kunden/{{ c.id }}/adressen" novalidate>
+      {{ csrf_input }}
+      {% if address_errors %}<div class="notice fehler">Bitte die markierten Felder prüfen.</div>{% endif %}
+      <div class="grid">
+        {% for f in address_kind.fields %}{{ form_field(f, address_values, address_errors) }}{% endfor %}
+      </div>
+      <div class="actions"><button type="submit" class="btn primary">Adresse speichern</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>
+
+<div class="tiles">
+  {% if quotes is not none %}
+  <section class="card tile">
+    <h2>Angebote</h2>
+    {% if quotes %}
+    <table class="table compact">
+      {% for a in quotes %}
+      <tr><td><a href="/angebote/{{ a.id }}">{{ a.number }}</a></td><td>{{ a.quote_date|datum }}</td>
+        <td class="num">{{ a.net_total|geld }}</td><td>{{ a.status_label }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="help">Noch keine Angebote.</p>{% endif %}
+    {% if can_quote and c.is_active %}<a class="btn small primary" href="/angebote/neu?kunde={{ c.id }}">Neues Angebot</a>{% endif %}
+  </section>
+  {% endif %}
+  {% if invoices is not none %}
+  <section class="card tile">
+    <h2>Umsatz &amp; offene Beträge</h2>
+    <p>Umsatz netto (festgeschriebene Rechnungen): <strong>{{ invoices.revenue_net|geld }}</strong><br>
+       Offen: <strong>{{ invoices.open|geld }}</strong></p>
+    {% if can_invoice and c.is_active %}<a class="btn small primary" href="/rechnungen/neu?kunde={{ c.id }}">Neue Rechnung</a>{% endif %}
+  </section>
+  {% endif %}
+</div>
+{% if invoices is not none and invoices.docs %}
+<section class="card">
+  <h2>Rechnungen</h2>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Nr.</th><th>Datum</th><th class="num">Brutto</th><th class="num">Offen</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for d in invoices.docs %}
+    <tr class="{% if d.status == 'storniert' %}cancelled{% endif %}">
+      <td><a href="/rechnungen/{{ d.id }}">{{ d.number or 'Entwurf' }}</a>{% if d.kind == 'storno' %} <span class="badge">Storno</span>{% endif %}</td>
+      <td>{{ d.doc_date|datum }}</td>
+      <td class="num">{{ d.gross_total|geld }}</td>
+      <td class="num">{% if d.is_final and d.open_amount > 0 %}{{ d.open_amount|geld }}{% endif %}</td>
+      <td>{% if d.is_draft %}Entwurf{% else %}{{ d.status_label }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

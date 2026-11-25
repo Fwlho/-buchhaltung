@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Datensicherung &amp; Export{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+{% set active = 'sicherung' %}
+<div class="settings-layout">
+{% include "_einstellungen_nav.html" %}
+<div>
+
+<section class="card">
+  <h2>Datensicherung</h2>
+  {% if local %}
+  <p class="intro">Bei jedem Programmstart wird automatisch eine Sicherung von Datenbank und allen Dateien
+    angelegt – aber nur, wenn sich seit der letzten Sicherung etwas geändert hat. Die letzten {{ keep }}
+    Sicherungen bleiben erhalten.</p>
+  <p class="help">Ordner: <code>{{ backup_dir }}</code>. Tipp: Kopieren Sie regelmäßig eine Sicherung auf einen
+    USB-Stick oder in einen Cloud-Ordner – eine Sicherung auf demselben Rechner schützt nicht vor einem
+    Festplattenschaden. Wiederherstellen: siehe BETRIEB.md im Programmordner.</p>
+  {% if is_admin %}
+    {% if backups %}
+    <table class="table compact">
+      <thead><tr><th>Sicherung</th><th>Erstellt</th><th class="num">Größe</th></tr></thead>
+      {% for b in backups %}<tr><td>{{ b.path.name }}</td><td>{{ b.created|datumzeit }}</td><td class="num">{{ b.size_mb|zahl(1) }} MB</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="help">Noch keine Sicherung vorhanden.</p>{% endif %}
+    <form method="post" action="/datensicherung/jetzt">{{ csrf_input }}
+      <button type="submit" class="btn secondary">Jetzt sichern</button></form>
+  {% endif %}
+  {% else %}
+  <p class="intro">Auf dem Server sichert der Betreiber täglich Datenbank und Dateien (siehe BETRIEB.md).</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Alle Daten dieser Firma exportieren</h2>
+  <p class="intro">Ein ZIP mit allen Datensätzen (als JSON-Dateien) und allen gespeicherten Belegen und PDFs dieser
+    Firma – z. B. für eine Datenschutz-Auskunft oder wenn Sie das Programm nicht mehr nutzen möchten.
+    Gespeicherte Passwörter werden nicht mit exportiert.</p>
+  {% if is_owner %}
+  <form method="post" action="/datensicherung/firmen-export">{{ csrf_input }}
+    <button type="submit" class="btn primary">Firmen-Export herunterladen</button></form>
+  {% else %}<p class="help">Nur der Inhaber bzw. die Inhaberin kann den vollständigen Export erstellen.</p>{% endif %}
+  <p class="help">Für die Steuerberatung gibt es den eigenen <a href="/export">DATEV-Export</a>.</p>
+</section>
+</div>
+</div>
+{% endblock %}

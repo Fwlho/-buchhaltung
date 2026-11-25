@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Ersteinrichtung{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Willkommen!</h1>
+  <p>Das Programm wird zum ersten Mal gestartet. Legen Sie jetzt Ihr Konto und Ihre erste Firma an.
+     Ihr Konto ist zugleich der <strong>Plattform-Admin</strong> (kann weitere Firmen anlegen) und
+     <strong>Inhaber</strong> der ersten Firma.</p>
+  <form method="post" action="/ersteinrichtung" novalidate>
+    {{ csrf_input }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="field {% if errors.name %}has-error{% endif %}">
+      <label for="name">Ihr Name</label>
+      <input type="text" id="name" name="name" value="{{ form.name }}" required autofocus>
+      {% if errors.name %}<p class="error">{{ errors.name }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.email %}has-error{% endif %}">
+      <label for="email">E-Mail-Adresse (für die Anmeldung und den Bestätigungscode)</label>
+      <input type="email" id="email" name="email" value="{{ form.email }}" autocomplete="username" required>
+      {% if errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password">Passwort (mindestens 10 Zeichen)</label>
+      <input type="password" id="password" name="password" autocomplete="new-password" required>
+    </div>
+    <div class="field {% if errors.password %}has-error{% endif %}">
+      <label for="password2">Passwort wiederholen</label>
+      <input type="password" id="password2" name="password2" autocomplete="new-password" required>
+      {% if errors.password %}<p class="error">{{ errors.password }}</p>{% endif %}
+    </div>
+    <p class="help">Zusätzlich schützt ein zweites, persönliches <strong>Admin-Passwort</strong> Einstellungen,
+      Benutzerverwaltung, Datensicherung und Firmenverwaltung. Es muss sich vom Anmelde-Passwort unterscheiden.</p>
+    <div class="field {% if errors.admin_password %}has-error{% endif %}">
+      <label for="admin_password">Admin-Passwort (mindestens 10 Zeichen)</label>
+      <input type="password" id="admin_password" name="admin_password" autocomplete="new-password" required>
+    </div>
+    <div class="field {% if errors.admin_password %}has-error{% endif %}">
+      <label for="admin_password2">Admin-Passwort wiederholen</label>
+      <input type="password" id="admin_password2" name="admin_password2" autocomplete="new-password" required>
+      {% if errors.admin_password %}<p class="error">{{ errors.admin_password }}</p>{% endif %}
+    </div>
+    <div class="field {% if errors.firma %}has-error{% endif %}">
+      <label for="firma">Name Ihrer Firma</label>
+      <input type="text" id="firma" name="firma" value="{{ form.firma }}" required>
+      {% if errors.firma %}<p class="error">{{ errors.firma }}</p>{% endif %}
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Konto und Firma anlegen</button></div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Anmelden{% endblock %}
+{% block mainclass %}page narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Anmelden</h1>
+  {% if error %}<div class="notice fehler">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    {{ csrf_input }}
+    <div class="field">
+      <label for="email">E-Mail-Adresse</label>
+      <input type="email" id="email" name="email" value="{{ email }}" autocomplete="username" required autofocus>
+    </div>
+    <div class="field">
+      <label for="password">Passwort</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+    </div>
+    <div class="actions"><button type="submit" class="btn primary">Weiter</button></div>
+  </form>
+  <p class="help">Nach dem Passwort erhalten Sie einen Bestätigungscode per E-Mail.</p>
+</section>
+{% endblock %}

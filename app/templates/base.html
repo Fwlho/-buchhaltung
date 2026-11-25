@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Buchhaltung{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}{% if static_version is defined %}?v={{ static_version('style.css') }}{% endif %}">
+</head>
+<body>
+{% macro nav_link(href, label, also=()) -%}
+  {%- set path = request.url.path -%}
+  {%- set ns = namespace(active=(path == href or (href != '/' and path.startswith(href ~ '/')))) -%}
+  {%- for prefix in also %}{% if path.startswith(prefix) %}{% set ns.active = true %}{% endif %}{% endfor -%}
+  <a href="{{ href }}"{% if ns.active %} class="active" aria-current="page"{% endif %}>{{ label }}</a>
+{%- endmacro %}
+<header class="topbar">
+  <div class="topbar-inner">
+    {% if nav_user %}<label for="menu-schalter" class="menu-button">☰ Menü</label>{% endif %}
+    <a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M17 25l10 10 20-22" fill="none" stroke="var(--on-accent)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 46h34M15 53h34" fill="none" stroke="var(--on-accent)" stroke-width="2.6" stroke-linecap="round"/></svg><span>{% if ctx %}{{ ctx.tenant.name }}{% else %}Buchhaltung{% endif %}</span></a>
+    {% if nav_user %}
+    <div class="usernav">
+      {% if ctx and ctx.memberships|length > 1 %}
+      <form method="post" action="/firma-wechseln" class="inline">
+        {{ csrf_input }}
+        <label class="sr-only" for="firma-wechsel">Firma wechseln</label>
+        <select id="firma-wechsel" name="tenant_id" class="compact">
+          {% for m in ctx.memberships %}
+          <option value="{{ m.tenant_id }}" {% if m.tenant_id == ctx.tenant_id %}selected{% endif %}>{{ m.tenant.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn small secondary">Wechseln</button>
+      </form>
+      {% endif %}
+      <a href="/konto">{{ nav_user.name }}</a>
+      <form method="post" action="/logout" class="inline">
+        {{ csrf_input }}
+        <button type="submit" class="btn small secondary">Abmelden</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</header>
+<div class="shell{% if nav_user %} with-nav{% endif %}">
+  {% if nav_user %}
+  {# Menü ohne JavaScript: auf schmalen Bildschirmen klappt der Knopf „Menü“ die Liste über dieses Kästchen auf #}
+  <input type="checkbox" id="menu-schalter" class="menu-toggle" aria-hidden="true">
+  <nav class="sidenav" aria-label="Hauptmenü">
+    {% if ctx %}
+      {% if ctx.tenant.setup_completed %}
+        {% set nav_sections = [
+          ('', [('/', 'Übersicht', ctx.can('dashboard'), ())]),
+          ('Verkauf', [('/angebote', 'Angebote', ctx.can('angebote'), ()),
+                       ('/auftraege', 'Aufträge', ctx.can('auftraege'), ()),
+                       ('/rechnungen', 'Rechnungen', ctx.can('rechnungen_ausgang'), ('/vertraege',)),
+                       ('/mahnwesen', 'Mahnwesen', ctx.can('mahnwesen'), ())]),
+          ('Einkauf', [('/eingangsrechnungen', 'Eingangsrechnungen', ctx.can('rechnungen_eingang'), ()),
+                       ('/pruefbereich', 'Prüfbereich', ctx.can('pruefbereich'), ())]),
+          ('Finanzen', [('/bank', 'Bankabgleich', ctx.can('bank'), ()),
+                        ('/euer', 'EÜR', ctx.can('euer'), ()),
+                        ('/steuern', 'Steuern', ctx.can('steuern'), ()),
+                        ('/export', 'Export Steuerberatung', ctx.can('export'), ())]),
+          ('Stammdaten', [('/kunden', 'Kunden', ctx.can('kunden'), ()),
+                          ('/lieferanten', 'Lieferanten', ctx.can('kunden'), ()),
+                          ('/katalog', 'Katalog', ctx.can('katalog'), ())]),
+          ('Verwaltung', [('/einstellungen', 'Einstellungen', ctx.can('einstellungen'), ('/datensicherung',)),
+                          ('/benutzer', 'Benutzer', ctx.can('benutzer'), ())]),
+        ] %}
+        {% for nav_title, nav_items in nav_sections %}
+          {% set nav_visible = nav_items|selectattr('2')|list %}
+          {% if nav_visible %}
+          <div class="nav-group">
+            {% if nav_title %}<div class="nav-title">{{ nav_title }}</div>{% endif %}
+            {% for href, label, allowed, also in nav_visible %}{{ nav_link(href, label, also) }}{% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <div class="nav-group">{{ nav_link('/einrichtung', 'Einrichtung') }}</div>
+      {% endif %}
+    {% endif %}
+    {% if nav_user.is_platform_admin %}
+    <div class="nav-group"><div class="nav-title">Plattform</div>{{ nav_link('/admin', 'Firmenverwaltung') }}</div>
+    {% endif %}
+  </nav>
+  {% endif %}
+  <main class="{% block mainclass %}page{% endblock %}">
+    {% if flash %}
+    <div class="notice {{ flash.kind }}" role="status">{{ flash.text }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<footer class="footer">Dieses Programm ist ein Hilfsmittel und ersetzt keine Steuerberatung.
+  {% for label, url in legal_links().items() %} · <a href="{{ url }}" rel="noopener" target="_blank">{{ label }}</a>{% endfor %}</footer>
+</body>
+</html>
