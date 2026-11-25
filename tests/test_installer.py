@@ -64,3 +64,9 @@ def test_veroeffentlichung_schliesst_daten_und_schluessel_aus():
     ignore = (Path(__file__).resolve().parents[1] / ".gitignore").read_text(encoding="utf-8").splitlines()
     for pattern in (".env", ".venv/", "data*/", "alte_version/", ".claude/"):
         assert pattern in ignore
+
+
+def test_kein_zip_von_github(tmp_path):
+    html = tmp_path / "seite.zip"
+    html.write_text("<html>Anmelden</html>")
+    assert inst.main(["--zip", str(html), "--ordner", str(tmp_path / "C"), "--ja", "--ohne-python"]) == 1

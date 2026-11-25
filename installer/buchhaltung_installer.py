@@ -167,6 +167,9 @@ def install_code(archive: Path, folder: Path, auto: bool) -> bool:
                                    "hineininstallieren? Vorhandene Dateien bleiben, gleichnamige werden ersetzt.", auto):
             raise Abbruch("Abgebrochen – bitte einen leeren Ordner wählen.")
 
+    if not zipfile.is_zipfile(archive):
+        raise Abbruch("GitHub hat kein Programmpaket geliefert. Ist das Repository "
+                      f"github.com/{REPO} öffentlich („Public“) und enthält es den Zweig „{BRANCH}“?")
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(archive) as z:
             z.extractall(tmp)
