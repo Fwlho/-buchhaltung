@@ -254,6 +254,15 @@ def create_invitation(
     return inv, token
 
 
+def renew_invitation(inv: Invitation) -> str:
+    """Neuen Einladungs-Link erzeugen (z. B. lokal ohne E-Mail-Versand oder abgelaufen): der alte Link wird
+    ungültig, die neue Frist beginnt. Gibt das neue Token zurück."""
+    token = new_token()
+    inv.token_hash = token_hash(token)
+    inv.expires_at = utcnow() + INVITATION_TTL
+    return token
+
+
 def find_invitation(db: Session, token: str) -> Invitation | None:
     inv = db.scalar(select(Invitation).where(Invitation.token_hash == token_hash(token)))
     if inv is None or not inv.is_open:

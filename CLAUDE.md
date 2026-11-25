@@ -228,6 +228,9 @@ Diese Datei enthält nur die Arbeitsregeln und wird bei Struktur- oder Konzeptä
 - `app/services/auslese.py` – PDF-Textauslese (pdfplumber) mit Unsicherheits-Markierung; `betraege.py` –
   Steuerzeilen ergänzen/prüfen, Skonto anteilig; `konten.py` – Vorschlagsliste Aufwandskonten SKR03/SKR04.
 - `app/services/anmeldung.py` – Passwort, Fehlversuch-Sperre, E-Mail-Code, Sitzungen, Einladungen.
+  Offene Einladungen (auch abgelaufene) haben unter Benutzer den Knopf „Link neu erzeugen“
+  (`/benutzer/einladungen/{id}/neuer-link`, `anmeldung.renew_invitation`: neues Token, alter Link ungültig, 7 Tage) –
+  für den lokalen Betrieb ohne E-Mail-Versand. Tests `tests/test_einladung_neuer_link.py`.
 - **Authenticator-App (TOTP)** (`app/services/totp.py`, entschieden 11.11.2026): RFC 6238 selbst umgesetzt, QR als SVG über
   reportlab (`/konto/app/qr.svg`); Einrichten unter `/konto` (Passwort → QR → erster Code → 8 Notfall-Codes, nur als SHA-256
   gespeichert). Felder `users.totp_*` (Geheimnis Fernet-verschlüsselt, `totp_last_step` gegen Wiederverwenden). Mit aktiver

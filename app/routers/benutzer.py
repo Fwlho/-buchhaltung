@@ -46,8 +46,9 @@ def _members(db: Session, tenant_id: int) -> list[Membership]:
 
 
 def _open_invitations(db: Session, tenant_id: int) -> list[Invitation]:
+    """Noch nicht angenommene und nicht zurückgezogene Einladungen – auch abgelaufene (Link neu erzeugen)."""
     stmt = select(Invitation).where(Invitation.tenant_id == tenant_id).order_by(Invitation.created_at.desc())
-    return [inv for inv in db.scalars(stmt) if inv.is_open]
+    return [inv for inv in db.scalars(stmt) if inv.accepted_at is None and inv.revoked_at is None]
 
 
 def _get_membership(db: Session, ctx: TenantContext, membership_id: int) -> Membership:
@@ -165,6 +166,31 @@ def invite(
     ok, message = anmeldung.send_invitation_mail(db, inv, link)
     db.commit()
     return _page(request, db, ctx, new_link=link, new_link_for=email_norm, info=message,
+                 info_kind="ok" if ok else "fehler")
+
+
+@router.post("/einladungen/{invitation_id}/neuer-link")
+def renew_invitation(
+    request: Request,
+    invitation_id: int,
+    ctx: TenantContext = Depends(users_edit),
+    db: Session = Depends(get_db),
+):
+    """Neuen Einladungs-Link anzeigen (der alte wird ungültig) und die Einladungs-Mail erneut senden bzw. lokal
+    ablegen. Gedacht für den lokalen Betrieb ohne E-Mail-Versand und für abgelaufene Einladungen."""
+    inv = db.scalar(select(Invitation).where(Invitation.id == invitation_id, Invitation.tenant_id == ctx.tenant_id))
+    if inv is None or inv.accepted_at is not None or inv.revoked_at is not None:
+        raise HTTPException(404, "Einladung nicht gefunden.")
+    if inv.role == ROLE_OWNER and ctx.role != ROLE_OWNER:
+        raise HTTPException(403, "Nur Inhaber können diese Einladung erneuern.")
+    token = anmeldung.renew_invitation(inv)
+    audit.log(db, action="einladung_erneuert", entity="benutzer", entity_id=inv.email, tenant_id=ctx.tenant_id,
+              user_id=ctx.user.id, ip=anmeldung.client_ip(request))
+    link = str(request.url_for("invitation_form", token=token))
+    ok, message = anmeldung.send_invitation_mail(db, inv, link)
+    db.commit()
+    return _page(request, db, ctx, new_link=link, new_link_for=inv.email,
+                 info="Neuer Einladungs-Link erzeugt – der bisherige Link gilt nicht mehr. " + message,
                  info_kind="ok" if ok else "fehler")
 
 

@@ -44,17 +44,22 @@
     <tr>
       <td>{{ inv.email }}</td>
       <td>{{ role_labels.get(inv.role, inv.role) }}</td>
-      <td>{{ inv.expires_at|datumzeit }}</td>
-      <td>{% if can_edit %}
-        <form method="post" action="/benutzer/einladungen/{{ inv.id }}/zurueckziehen">
+      <td>{% if inv.is_open %}{{ inv.expires_at|datumzeit }}{% else %}<span class="badge warn">abgelaufen</span>{% endif %}</td>
+      <td>{% if can_edit %}<span class="inline-form">
+        <form method="post" action="/benutzer/einladungen/{{ inv.id }}/neuer-link" class="inline-form">
+          {{ csrf_input }}<button type="submit" class="btn small secondary">Link neu erzeugen</button>
+        </form>
+        <form method="post" action="/benutzer/einladungen/{{ inv.id }}/zurueckziehen" class="inline-form">
           {{ csrf_input }}<button type="submit" class="btn small danger">Zurückziehen</button>
-        </form>{% endif %}
+        </form></span>{% endif %}
       </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
+  {% if can_edit %}<p class="help">Ohne E-Mail-Versand (lokale Version) oder nach Ablauf: „Link neu erzeugen“ zeigt einen
+    neuen Link oben auf dieser Seite an; der bisherige gilt dann nicht mehr. Lokal funktioniert der Link nur an diesem PC.</p>{% endif %}
 </section>
 {% endif %}
 
