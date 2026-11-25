@@ -17,3 +17,4 @@ installer/.bau/
 installer/build/
 installer/dist/
 *.spec
+installer/bau.log
