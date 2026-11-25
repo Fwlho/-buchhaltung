@@ -41,6 +41,11 @@ def ensure_requirements() -> None:
 
     print("Installiere fehlende Programmteile: " + ", ".join(missing) + " …")
     result = subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check", *missing])
+    # Python merkt sich beim Start, welche Pakete es gibt – ohne das hier fehlen frisch installierte Pakete
+    # bis zum nächsten Neustart (z. B. „No module named 'pdfplumber'“ beim Einlesen von Belegen).
+    import importlib
+
+    importlib.invalidate_caches()
     if result.returncode != 0:
         print("Die Installation ist fehlgeschlagen (Internetverbindung?). Das Programm startet trotzdem;")
         print("Funktionen, die diese Teile brauchen (z. B. KI-Vorschläge), sind dann nicht verfügbar.")
