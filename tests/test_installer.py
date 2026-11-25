@@ -70,3 +70,44 @@ def test_kein_zip_von_github(tmp_path):
     html = tmp_path / "seite.zip"
     html.write_text("<html>Anmelden</html>")
     assert inst.main(["--zip", str(html), "--ordner", str(tmp_path / "C"), "--ja", "--ohne-python"]) == 1
+
+
+def test_neuer_ordner_trotz_vorhandener_installation(tmp_path, monkeypatch):
+    good = _zip(tmp_path / "ok.zip", {"run.py": "v1", "requirements.txt": ""})
+    old = tmp_path / "Alt"
+    assert inst.main(["--zip", str(good), "--ordner", str(old), "--ja", "--ohne-python"]) == 0
+    (old / "data").mkdir()
+    (old / "data" / "app.db").write_text("ALT")
+    new = tmp_path / "Neu"
+    answers = iter(["2", str(new), "j", ""])                    # neuer Ordner, langer Testpfad ok, schließen
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers, ""))
+    assert inst.main(["--zip", str(good), "--ohne-python"]) == 0
+    assert (new / "run.py").exists() and not (new / "data").exists()       # frische Installation
+    assert (old / "data" / "app.db").read_text() == "ALT"                   # alte bleibt unberührt
+    assert not (old / "alte_version").exists()
+    assert inst.remembered_dir() == new.resolve()
+
+    # Enter = vorhandene (jetzt: neue) Installation aktualisieren
+    answers = iter(["", "j", ""])
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers, ""))
+    assert inst.main(["--zip", str(good), "--ohne-python"]) == 0
+    assert (new / "alte_version" / "programm_vorher.zip").exists()
+
+
+def test_vorschlag_fuer_neuen_ordner(tmp_path, monkeypatch):
+    monkeypatch.setattr(inst, "DEFAULT_DIR", tmp_path / "Buchhaltung")
+    (tmp_path / "Buchhaltung").mkdir()
+    (tmp_path / "Buchhaltung" / "run.py").write_text("x")
+    assert inst._free_suggestion(tmp_path / "Buchhaltung") == tmp_path / "Buchhaltung2"
+
+
+def test_eingaben_mit_bom_und_relativem_pfad(tmp_path, monkeypatch):
+    inst.CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    old = tmp_path / "Alt"
+    old.mkdir()
+    (old / "run.py").write_text("x")
+    inst.CONFIG.write_text('﻿{"ordner": "%s"}' % str(old).replace("\\", "\\\\"), encoding="utf-8")
+    assert inst.remembered_dir() == old                                      # Einstellung mit BOM lesbar
+    answers = iter(["﻿2", "nur_ein_name", str(tmp_path / "Neu")])
+    monkeypatch.setattr("builtins.input", lambda *_: next(answers))
+    assert inst.choose_dir(None, False) == tmp_path / "Neu"                  # relativer Pfad wird abgelehnt

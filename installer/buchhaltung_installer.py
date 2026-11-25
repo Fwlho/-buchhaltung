@@ -15,6 +15,7 @@ Test ohne Internet: ``python buchhaltung_installer.py --zip pfad\\zum.zip --ordn
 """
 import argparse
 import json
+import re
 import os
 import shutil
 import socket
@@ -54,7 +55,7 @@ def say(text: str = "") -> None:
 def ask_yes(question: str, auto: bool) -> bool:
     if auto:
         return True
-    answer = input(f"{question} [J/n] ").strip().lower()
+    answer = _input(f"{question} [J/n] ").lower()
     return answer in ("", "j", "ja", "y", "yes")
 
 
@@ -65,7 +66,7 @@ def kept(name: str) -> bool:
 # --------------------------------------------------------------- Einstellung
 def remembered_dir() -> Path | None:
     try:
-        return Path(json.loads(CONFIG.read_text(encoding="utf-8"))["ordner"])
+        return Path(json.loads(CONFIG.read_text(encoding="utf-8-sig"))["ordner"])
     except (OSError, ValueError, KeyError):
         return None
 
@@ -78,17 +79,62 @@ def remember_dir(path: Path) -> None:
         pass
 
 
+def _input(prompt: str) -> str:
+    """Eingabe ohne Anführungszeichen und ohne unsichtbare Steuerzeichen vorn (z. B. BOM aus PowerShell).
+    Ist keine Eingabe mehr möglich (Fenster ohne Tastatur), gilt das wie Enter."""
+    try:
+        raw = input(prompt)
+    except EOFError:
+        return ""
+    raw = raw.replace("\ufeff", "").strip().strip('"')
+    drive = re.search(r"[A-Za-z]:[\\/]", raw)               # Pfad: ab dem Laufwerksbuchstaben
+    if drive:
+        return raw[drive.start():]
+    return raw if raw.isascii() else "".join(ch for ch in raw if ch.isascii() and ch.isprintable())
+
+
+def _ask_folder(suggestion: Path) -> Path:
+    while True:
+        answer = _input(f"In welchen Ordner soll das Programm? [Enter = {suggestion}] ")
+        if not answer:
+            return suggestion
+        folder = Path(answer)
+        if folder.is_absolute() and folder.drive:
+            return folder
+        say("Bitte den vollständigen Pfad mit Laufwerk angeben, z. B. C:\\Buchhaltung oder D:\\Programme\\Buchhaltung.")
+
+
+def _free_suggestion(known: Path | None) -> Path:
+    """Vorschlag für einen neuen Ordner, in dem noch keine Installation liegt."""
+    candidate, n = DEFAULT_DIR, 1
+    while (candidate / "run.py").exists() or (known and candidate.resolve() == known.resolve()):
+        n += 1
+        candidate = DEFAULT_DIR.with_name(f"{DEFAULT_DIR.name}{n}")
+    return candidate
+
+
 def choose_dir(arg: str | None, auto: bool) -> Path:
+    """Ordner wählen: vorhandene Installation aktualisieren ODER in einen neuen Ordner installieren."""
     if arg:
         return Path(arg)
     known = remembered_dir()
-    if known and (known / "run.py").exists():
-        say(f"Vorhandene Installation gefunden: {known}")
-        return known
+    if not (known and (known / "run.py").exists()):
+        return DEFAULT_DIR if auto else _ask_folder(DEFAULT_DIR)
     if auto:
-        return DEFAULT_DIR
-    answer = input(f"In welchen Ordner soll das Programm? [Enter = {DEFAULT_DIR}] ").strip().strip('"')
-    return Path(answer) if answer else DEFAULT_DIR
+        return known
+    say(f"Vorhandene Installation gefunden: {known}")
+    say("  1 = diese Installation aktualisieren (Daten bleiben erhalten)")
+    say("  2 = in einen NEUEN Ordner installieren")
+    while True:
+        choice = _input("Bitte 1 oder 2 eingeben [Enter = 1]: ")
+        if choice in ("", "1"):
+            return known
+        if choice == "2":
+            folder = _ask_folder(_free_suggestion(known))
+            if (folder / "run.py").exists():
+                say(f"Hinweis: In {folder} liegt schon eine Installation – sie wird aktualisiert.")
+            return folder
+        say("Bitte nur 1 oder 2 eingeben.")
 
 
 # ----------------------------------------------------------------- Laden
@@ -126,7 +172,7 @@ def wait_until_closed(auto: bool) -> None:
     while program_running():
         if auto:
             raise Abbruch("Das Programm läuft noch – bitte erst beenden.")
-        input("Das Buchhaltungsprogramm läuft gerade. Bitte sein Fenster schließen und dann Enter drücken … ")
+        _input("Das Buchhaltungsprogramm läuft gerade. Bitte sein Fenster schließen und dann Enter drücken … ")
         time.sleep(1)
 
 
@@ -313,13 +359,13 @@ def main(argv: list[str] | None = None) -> int:
         if not args.ohne_python and not args.ja and ask_yes("Programm jetzt starten?", False):
             subprocess.Popen(["cmd", "/c", "start", "Buchhaltung", str(folder / "start.bat")], cwd=folder)
         elif not args.ja:
-            input("Enter drücken zum Schließen … ")
+            _input("Enter drücken zum Schließen … ")
         return 0
     except Abbruch as exc:
         say()
         say(f"FEHLER: {exc}")
         if not args.ja:
-            input("Enter drücken zum Schließen … ")
+            _input("Enter drücken zum Schließen … ")
         return 1
     except KeyboardInterrupt:
         say("\nAbgebrochen.")
