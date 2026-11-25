@@ -14,7 +14,7 @@ from sqlalchemy import select
 from app.database import SessionLocal, tenant_scope
 from app.models import Tenant
 from app.models.tenant import TENANT_ACTIVE
-from app.services import auftraege, eingangsordner, email_import, ki_auslese, kontierung, vertraege
+from app.services import ablage_ordner, auftraege, eingangsordner, email_import, ki_auslese, kontierung, vertraege
 
 log = logging.getLogger("app.worker")
 TICK_SECONDS = 60
@@ -62,6 +62,14 @@ def run_due_jobs() -> int:
                 except Exception:  # noqa: BLE001
                     db.rollback()
                     log.exception("Vertragsabrechnung für Firma %s fehlgeschlagen", tenant_id)
+                try:  # festgeschriebene Rechnungen in die Ablage-Ordner (Jahr\Monat) kopieren – nur lokal
+                    problems = ablage_ordner.nachtragen(db)
+                    db.commit()
+                    if problems:
+                        log.warning("Firma %s: Ablage-Ordner nicht erreichbar: %s", tenant_id, "; ".join(problems[:3]))
+                except Exception:  # noqa: BLE001
+                    db.rollback()
+                    log.exception("Ablage-Ordner für Firma %s fehlgeschlagen", tenant_id)
                 try:  # Rechnungen, angenommene Angebote und Verträge ohne Auftrag -> Auftragsübersicht
                     synced = auftraege.sync(db)
                     db.commit()

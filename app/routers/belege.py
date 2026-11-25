@@ -15,7 +15,7 @@ from app.database import get_db
 from app.deps import TenantContext, require_module
 from app.formatting import format_date, format_decimal
 from app.models import AuditLog, Document, Supplier, User
-from app.services import ablage, anmeldung, belege, einstellungen, ki, ki_auslese, konten, kontierung, ocr, steuerschuld
+from app.services import ablage, ablage_ordner, anmeldung, belege, einstellungen, ki, ki_auslese, konten, kontierung, ocr, steuerschuld
 from app.services import stammdaten as stamm
 from app.templating import redirect, render
 
@@ -381,7 +381,9 @@ async def incoming_mark_paid(request: Request, doc_id: int, ctx: TenantContext =
         db.rollback()
         return redirect(_back(form, doc), f"{doc.partner_name or 'Beleg'} {doc.number or ''}: {problem}", "fehler")
     db.commit()
-    return redirect(_back(form, doc), f"{doc.partner_name or 'Beleg'} {doc.number or ''} als bezahlt markiert.")
+    warning = ablage_ordner.nach_festschreiben(db)
+    return redirect(_back(form, doc), f"{doc.partner_name or 'Beleg'} {doc.number or ''} als bezahlt markiert."
+                    + (f" {warning}" if warning else ""), "hinweis" if warning else "ok")
 
 
 @router.post("/eingangsrechnungen/{doc_id}/unbezahlt")
@@ -410,7 +412,9 @@ async def incoming_finalize(request: Request, doc_id: int, ctx: TenantContext = 
     if missing:
         return redirect(f"{AREA_IN}/{doc.id}", "Festschreiben nicht möglich. Es fehlt: " + ", ".join(missing), "fehler")
     db.commit()
-    return redirect(f"{AREA_IN}/{doc.id}", "Beleg festgeschrieben – er kann nicht mehr geändert werden.")
+    warning = ablage_ordner.nach_festschreiben(db)
+    return redirect(f"{AREA_IN}/{doc.id}", "Beleg festgeschrieben – er kann nicht mehr geändert werden."
+                    + (f" {warning}" if warning else ""), "hinweis" if warning else "ok")
 
 
 @router.post("/eingangsrechnungen/{doc_id}/zahlung")
@@ -427,7 +431,8 @@ async def incoming_payment(request: Request, doc_id: int, ctx: TenantContext = D
         return _detail(request, db, ctx, _doc(db, doc_id, pending=False), payment_errors=errors, status_code=400)
     db.commit()
     message = "Zahlung erfasst." + (" Der Beleg ist jetzt vollständig bezahlt." if doc.status == "bezahlt" else "")
-    return redirect(f"{AREA_IN}/{doc.id}", message)
+    warning = ablage_ordner.nach_festschreiben(db)      # die erste Zahlung schreibt den Beleg fest
+    return redirect(f"{AREA_IN}/{doc.id}", message + (f" {warning}" if warning else ""))
 
 
 @router.post("/eingangsrechnungen/{doc_id}/zahlung/{payment_id}/loeschen")

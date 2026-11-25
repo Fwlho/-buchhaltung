@@ -179,10 +179,6 @@ GROUPS: tuple[Group, ...] = (
                        "E-Rechnung zwischen Unternehmen schrittweise Pflicht."),
             Field("rechnung.zahlungs_qr", "QR-Code zum Bezahlen auf Rechnungen", "choice", "girocode", required=True,
                   choices=(("girocode", "GiroCode (Überweisung per Banking-App)"), ("keiner", "kein QR-Code"))),
-            Field("rechnung.ablage_ordner", "Ablage-Ordner für Rechnungs-PDFs (optional, nur lokale Version)",
-                  help="Zusätzliche Kopie jeder festgeschriebenen Rechnung unter <Ordner>/<Jahr>/<MM Monat>/<Kunde>/. "
-                       "Leer lassen = keine Kopie. Das Original bleibt immer im Programm gespeichert.",
-                  placeholder=r"z. B. D:\Buchhaltung\Rechnungen"),
         ),
     ),
     Group(
@@ -241,12 +237,21 @@ GROUPS: tuple[Group, ...] = (
         "Ausgangsrechnungen (PDF). Eingelesene Dateien wandern in den Unterordner „verarbeitet“, Problemfälle mit "
         "Begründung nach „fehler“ – es wird nie etwas gelöscht. Nur in der lokalen Version – auf dem Server "
         "Rechnungen bitte an das E-Mail-Postfach weiterleiten (Einstellungen → E-Mail) oder mehrere Dateien auf "
-        "einmal hochladen.",
+        "einmal hochladen. Beim Festschreiben kopiert das Programm jede Rechnung zusätzlich in die Ablage "
+        r"<Ordner>\<Jahr>\<MM Monat> (nach Rechnungsdatum, fehlende Ordner werden angelegt).",
         (
             Field("ordner.aktiv", "Ordner automatisch jede Minute einlesen (solange das Programm läuft)", "bool", False,
                   help="Ohne Haken nur über den Knopf „Jetzt einlesen“ im jeweiligen Prüfbereich."),
             Field("ordner.eingang", "Ordner für Eingangsrechnungen", placeholder=r"z. B. E:\Rechnungen\Eingang"),
             Field("ordner.ausgang", "Ordner für alte Ausgangsrechnungen", placeholder=r"z. B. E:\Rechnungen\Ausgang"),
+            Field("ordner.ablage_eingang", "Ablage für festgeschriebene Eingangsrechnungen (optional)",
+                  placeholder=r"z. B. Y:\Rechnungen\Eingang",
+                  help=r"Kopie jeder festgeschriebenen Eingangsrechnung unter <Ordner>\<Jahr>\<MM Monat>, z. B. "
+                       r"2026\11 November. Leer = derselbe Ordner wie „Ordner für Eingangsrechnungen“."),
+            Field("ordner.ablage_ausgang", "Ablage für festgeschriebene Ausgangsrechnungen (optional)",
+                  placeholder=r"z. B. Y:\Rechnungen\Ausgang",
+                  help="Eigene Rechnungen, Stornorechnungen und übernommene alte Rechnungen, ebenfalls nach Jahr und "
+                       "Monat. Leer = derselbe Ordner wie „Ordner für alte Ausgangsrechnungen“."),
         ),
     ),
     Group(
@@ -375,15 +380,6 @@ def _group_checks(group: Group, new: dict[str, Any], errors: dict[str, str]) -> 
     if group.key == "steuer":
         if not new.get("steuer.steuernummer") and not new.get("steuer.ust_id"):
             errors["steuer.steuernummer"] = "Bitte Steuernummer oder USt-IdNr. angeben (Pflichtangabe auf Rechnungen)."
-    if group.key == "design" and new.get("rechnung.ablage_ordner"):
-        from pathlib import Path
-
-        from app.config import get_settings
-
-        if not get_settings().is_local:
-            errors["rechnung.ablage_ordner"] = "Nur in der lokalen Version möglich – auf dem Server bitte den ZIP-Export nutzen."
-        elif not Path(new["rechnung.ablage_ordner"]).is_absolute():
-            errors["rechnung.ablage_ordner"] = r"Bitte einen vollständigen Pfad angeben, z. B. D:\Buchhaltung\Rechnungen."
     if group.key == "ki" and new.get("ki.aktiv") and not new.get("ki.api_key") \
             and not os.environ.get("ANTHROPIC_API_KEY"):
         errors["ki.api_key"] = "Für KI-Vorschläge nötig."
@@ -392,6 +388,9 @@ def _group_checks(group: Group, new: dict[str, Any], errors: dict[str, str]) -> 
 
         for key, problem in eingangsordner.setting_problems(new.get("ordner.eingang"), new.get("ordner.ausgang"),
                                                             bool(new.get("ordner.aktiv"))).items():
+            errors[key] = problem
+        for key, problem in eingangsordner.archive_problems(new.get("ordner.ablage_eingang"),
+                                                            new.get("ordner.ablage_ausgang")).items():
             errors[key] = problem
     if group.key == "email":
         if new.get("imap.aktiv"):

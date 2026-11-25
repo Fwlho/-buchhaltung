@@ -112,6 +112,14 @@ Diese Datei enthält nur die Arbeitsregeln und wird bei Struktur- oder Konzeptä
   (`ordner.aktiv`), Knöpfe `/pruefbereich/ordner-einlesen`, `/rechnungen/import/ordner-einlesen`. Nur lokal
   (`is_local`); auf dem Server ausgeblendet – dort E-Mail-Postfach + Mehrfach-Upload (entschieden 11.11.2026, kein SFTP).
   Tests `tests/test_eingangsordner.py`.
+- **Ablage-Ordner** (`app/services/ablage_ordner.py`, entschieden 25.11.2026): festgeschriebene Rechnungen werden als KOPIE
+  nach `<Ablage>\<Jahr>\<MM Monat>` (nach Rechnungsdatum, z. B. `2026\11 November`, fehlende Ordner inkl. neues Jahr
+  werden angelegt) gelegt – Eingang nach `ordner.ablage_eingang`, Ausgang (eigene, Storno, übernommene alte) nach
+  `ordner.ablage_ausgang`; leer = `ordner.eingang` bzw. `ordner.ausgang`. Nie überschreiben (gleiche Datei = nichts tun,
+  sonst „Name (2)“). `documents.ablage_at/ablage_pfad` (Migration 0019; ersetzt `rechnung.ablage_ordner`, alte Belege gelten
+  als abgelegt). `nachtragen` läuft nach dem Festschreiben (`nach_festschreiben` in den Routen: Festschreiben, Zahlung,
+  Häkchen, Storno, Übernehmen alter Rechnungen) und im Worker; Laufwerk weg = Hinweis, später erneut. Nur lokal.
+  Tests `tests/test_ablage_ordner.py`.
 - Impressum/Datenschutz: Links auf die Website des Betreibers über `IMPRESSUM_URL`/`DATENSCHUTZ_URL` (.env, nur https),
   im Seitenfuß jeder Seite inkl. Anmeldung (`templating.legal_links`). Tests `tests/test_rechtliches.py`.
 - Angebote: Modelle `app/models/angebote.py`, Kalkulation als reine Funktionen `app/services/calc.py`

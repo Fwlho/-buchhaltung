@@ -256,20 +256,6 @@ def test_ueberfaellig_filter_und_kundenseite(client, db):
     assert "155,20 €" in page and old.number in page and "Neue Rechnung" in page
 
 
-def test_ablage_ordner_kopie(client, db, tmp_path):
-    _ready(client)
-    design = {**VALID_SETTINGS["design"], "rechnung.ablage_ordner": str(tmp_path)}
-    r = post(client, "/einstellungen/design", design)
-    assert "gespeichert" in r.text
-    doc = _final(client, db)
-    months = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
-              "November", "Dezember")
-    folder = tmp_path / str(YEAR) / f"{date.today().month:02d} {months[date.today().month - 1]}" / "Bäckerei Krume GmbH"
-    files = list(folder.glob("*.pdf"))
-    assert len(files) == 1 and files[0].name.startswith(f"{YEAR}-001-Rechnung")
-    assert files[0].read_bytes() == read_stored(doc.file)
-
-
 def test_zip_und_drucken(client, db):
     _ready(client)
     a, b = _final(client, db), _final(client, db)

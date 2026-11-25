@@ -110,3 +110,33 @@ def test_auftraege_migration_uebernimmt_rechte_von_angeboten(tmp_path):
     assert con.execute("SELECT COUNT(*) FROM orders").fetchone()[0] == 0
     assert con.execute("PRAGMA foreign_key_check").fetchall() == []
     con.close()
+
+
+def test_ablage_migration_uebernimmt_alten_ordner(tmp_path):
+    """0019: „rechnung.ablage_ordner“ wird zu „ordner.ablage_ausgang“; schon festgeschriebene Belege gelten als abgelegt."""
+    path = tmp_path / "alt.db"
+    cfg = _config(f"sqlite:///{path.as_posix()}")
+    command.upgrade(cfg, "0018")
+
+    con = sqlite3.connect(path)
+    now = "2026-11-01 10:00:00"
+    con.execute("INSERT INTO tenants (id, name, status, setup_completed, created_at, updated_at) "
+                "VALUES (1, 'Testfirma', 'aktiv', 1, ?, ?)", (now, now))
+    con.execute("INSERT INTO tenant_settings (id, tenant_id, key, value, created_at, updated_at) "
+                "VALUES (1, 1, 'rechnung.ablage_ordner', '\"D:/Test/Ablage\"', ?, ?)", (now, now))
+    for doc_id, state in ((1, "festgeschrieben"), (2, "entwurf")):
+        con.execute("INSERT INTO documents (id, tenant_id, direction, kind, state, status, source, pending, "
+                    "needs_review, review_fields, created_at, updated_at) VALUES (?, 1, 'eingang', 'rechnung', ?, "
+                    "'offen', 'upload', 0, 0, '[]', ?, ?)", (doc_id, state, now, now))
+    con.commit()
+    con.close()
+
+    command.upgrade(cfg, "head")
+
+    con = sqlite3.connect(path)
+    rows = con.execute("SELECT key, value FROM tenant_settings ORDER BY key").fetchall()
+    assert rows == [("ordner.ablage_ausgang", '"D:/Test/Ablage"')]
+    stamps = dict(con.execute("SELECT id, ablage_at FROM documents").fetchall())
+    assert stamps[1] is not None and stamps[2] is None
+    assert con.execute("PRAGMA foreign_key_check").fetchall() == []
+    con.close()

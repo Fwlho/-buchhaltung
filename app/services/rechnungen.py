@@ -450,27 +450,6 @@ def pdf_filename(doc: Document) -> str:
     return f"{number}-{kind}-{customer}.pdf"
 
 
-def copy_to_folder(db: Session, doc: Document) -> str | None:
-    """Kopie ins Ablage-Ordner-System <Ordner>/<Jahr>/<MM Monat>/<Kunde>/. Fehler blockieren nichts,
-    sie werden nur als Hinweis zurückgegeben."""
-    from app.config import get_settings
-
-    folder = einstellungen.get(db, "rechnung.ablage_ordner")
-    if not folder or not get_settings().is_local or doc.file is None or doc.doc_date is None:
-        return None
-    try:
-        customer = ablage.clean_filename(doc.recipient_name or "Kunde")
-        target = (Path(folder) / str(doc.doc_date.year) / f"{doc.doc_date.month:02d} {MONTHS[doc.doc_date.month - 1]}"
-                  / customer)
-        target.mkdir(parents=True, exist_ok=True)
-        (target / pdf_filename(doc)).write_bytes(ablage.read_bytes(doc.file, db))
-        if doc.xml_file is not None:
-            (target / doc.xml_file.original_name).write_bytes(ablage.read_bytes(doc.xml_file, db))
-    except OSError as exc:
-        return f"Die Kopie in den Ablage-Ordner ist fehlgeschlagen ({exc}). Die Rechnung selbst ist gespeichert."
-    return None
-
-
 # ------------------------------------------------------------------ Storno
 def _negate(doc: Document) -> None:
     for line in doc.lines:

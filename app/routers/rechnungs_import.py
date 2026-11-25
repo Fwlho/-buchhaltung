@@ -11,7 +11,7 @@ from app.deps import TenantContext, require_module
 from app.formatting import format_date, format_decimal
 from app.models import Document
 from app.routers.belege import _file_response, _steps
-from app.services import ablage, anmeldung, belege, rechnungs_import
+from app.services import ablage, ablage_ordner, anmeldung, belege, rechnungs_import
 from app.templating import redirect, render
 
 router = APIRouter(prefix="/rechnungen/import")
@@ -128,9 +128,11 @@ async def save(request: Request, doc_id: int, ctx: TenantContext = Depends(out_e
     db.commit()
     if not take_over:
         return redirect(f"{BASE}/{doc.id}", "Gespeichert.")
+    warning = ablage_ordner.nach_festschreiben(db)
     paid = " und als bezahlt gebucht" if doc.payments else ""
     rest = rechnungs_import.pending_count(db)
-    message = f"Rechnung {doc.number} übernommen{paid} – sie zählt jetzt in den Auswertungen."
+    message = f"Rechnung {doc.number} übernommen{paid} – sie zählt jetzt in den Auswertungen." + (
+        f" {warning}" if warning else "")
     if rest:
         return redirect(BASE, message + f" Noch {rest} zu prüfen.")
     return redirect(f"/rechnungen/{doc.id}", message)

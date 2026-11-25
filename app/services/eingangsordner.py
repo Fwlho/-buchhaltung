@@ -78,6 +78,26 @@ def setting_problems(eingang: str | None, ausgang: str | None, auto: bool) -> di
     return errors
 
 
+def archive_problems(eingang: str | None, ausgang: str | None) -> dict[str, str]:
+    """Prüfung der Ablage-Ordner (app/services/ablage_ordner.py); legt fehlende Ordner an."""
+    errors: dict[str, str] = {}
+    for key, value in (("ordner.ablage_eingang", eingang), ("ordner.ablage_ausgang", ausgang)):
+        if not value:
+            continue
+        if not get_settings().is_local:
+            errors[key] = "Nur in der lokalen Version möglich."
+            continue
+        path = Path(value)
+        if not path.is_absolute() or not path.drive:          # mit Laufwerk (Y:\…) oder Netzwerkpfad (\\server\…)
+            errors[key] = r"Bitte einen vollständigen Pfad angeben, z. B. Y:\Rechnungen\Eingang."
+            continue
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            errors[key] = f"Der Ordner lässt sich nicht anlegen oder öffnen ({exc.strerror or exc})."
+    return errors
+
+
 def folders(db: Session) -> dict[str, Path]:
     if not get_settings().is_local:
         return {}

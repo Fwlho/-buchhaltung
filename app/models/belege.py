@@ -126,6 +126,9 @@ class Document(TenantMixin, PendingMixin, Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Ablage-Ordner (app/services/ablage_ordner.py): wann/wohin die Datei nach dem Festschreiben kopiert wurde
+    ablage_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ablage_pfad: Mapped[str | None] = mapped_column(String(500), nullable=True)
     finalized_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 

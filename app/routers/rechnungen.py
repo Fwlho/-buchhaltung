@@ -12,7 +12,7 @@ from app.deps import TenantContext, require_module
 from app.formatting import format_date, format_decimal
 from app.models import AuditLog, CatalogItem, Customer, CustomerAddress, Document, User
 from app.models.stammdaten import UNITS
-from app.services import ablage, anmeldung, belege, mahnwesen, rechnungen, rechnungs_import, vertraege
+from app.services import ablage, ablage_ordner, anmeldung, belege, mahnwesen, rechnungen, rechnungs_import, vertraege
 from app.templating import redirect, render
 
 router = APIRouter(prefix="/rechnungen")
@@ -238,7 +238,7 @@ def finalize(request: Request, doc_id: int, ctx: TenantContext = Depends(out_edi
         db.rollback()
         return redirect(f"{BASE}/{doc_id}", "Festschreiben nicht möglich. Es fehlt: " + ", ".join(missing), "fehler")
     db.commit()
-    warning = rechnungen.copy_to_folder(db, doc)
+    warning = ablage_ordner.nach_festschreiben(db)
     message = f"Rechnung {doc.number} festgeschrieben – das PDF ist unveränderbar gespeichert."
     return redirect(f"{BASE}/{doc.id}", message + (" " + warning if warning else ""), "hinweis" if warning else "ok")
 
@@ -253,7 +253,7 @@ def cancel(request: Request, doc_id: int, grund: str = Form(""), ctx: TenantCont
         db.rollback()
         return redirect(f"{BASE}/{doc_id}", problem, "fehler")
     db.commit()
-    rechnungen.copy_to_folder(db, storno)
+    ablage_ordner.nach_festschreiben(db)
     return redirect(f"{BASE}/{storno.id}", f"Stornorechnung {storno.number} erstellt; Rechnung {doc.number} ist storniert.")
 
 
